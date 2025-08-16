@@ -13,6 +13,7 @@ import { AuthProvider } from './state/AuthContext';
 import { registerSW } from './lib/pwa';
 import { ToastProvider } from './state/ToastContext';
 import ToastViewport from './components/ToastViewport';
+import { RouteProvider } from './state/RouteContext';
 
 const router = createBrowserRouter([
   { path: '/', element: <Landing /> },
@@ -28,7 +29,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <TenantProvider>
       <AuthProvider>
         <ToastProvider>
-          <RouterProvider router={router} />
+          <RouteProvider>
+            <RouterProvider router={router} />
+          </RouteProvider>
           <ToastViewport />
         </ToastProvider>
       </AuthProvider>

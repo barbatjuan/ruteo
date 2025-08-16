@@ -1,30 +1,68 @@
-import React, { useState } from 'react';
-import { parseSimpleCSV } from '../lib/csv';
+import React, { useEffect, useRef, useState } from 'react';
+import { parseSimpleCSV, SimpleRow } from '../lib/csv';
 import { useToast } from '../state/ToastContext';
 import Loader from './Loader';
+import { useRoute } from '../state/RouteContext';
+import { geocodeAddresses, calculateOptimizedRoute, autocompletePlaces, geocodeByPlaceId } from '../lib/api';
 
 const AddressForm: React.FC = () => {
   const [input, setInput] = useState('');
   const [errors, setErrors] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { success, error } = useToast();
+  const { addStop, stops, setStops, setRouteInfo } = useRoute();
+  const [suggestions, setSuggestions] = useState<{ description: string; place_id: string }[]>([]);
+  const [openSug, setOpenSug] = useState(false);
+  const debRef = useRef<number | undefined>(undefined);
+  const boxRef = useRef<HTMLDivElement | null>(null);
 
-  const add = () => {
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpenSug(false);
+    };
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  }, []);
+
+  useEffect(() => {
+    window.clearTimeout(debRef.current);
+    if (!input || input.trim().length < 3) {
+      setSuggestions([]); setOpenSug(false); return;
+    }
+    debRef.current = window.setTimeout(async () => {
+      const res = await autocompletePlaces(input.trim());
+      setSuggestions(res);
+      setOpenSug(res.length > 0);
+    }, 250);
+  }, [input]);
+
+  const add = async () => {
     if (!input || input.trim().length < 3) {
       setErrors('La dirección debe tener al menos 3 caracteres');
       error('Dirección inválida');
       return;
     }
     setErrors(null);
-    // TODO: push to state/store and map
-    setInput('');
-    success('Dirección agregada');
+    try {
+      setLoading(true);
+      const res = await geocodeAddresses([{ address: input }]);
+      if (!res || !res.length) throw new Error('No se pudo geocodificar');
+      const g = res[0];
+      addStop({ address: g.normalized || input, lat: g.lat, lng: g.lng });
+      setInput('');
+      success('Dirección agregada');
+    } catch (e) {
+      console.error(e);
+      error('Error al geocodificar la dirección');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
       <h2 className="font-semibold mb-2">Direcciones rápidas</h2>
-      <div className="flex gap-2">
+      <div className="flex gap-2 relative" ref={boxRef}>
         <input
           aria-label="Nueva dirección"
           className="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-transparent px-3 py-2"
@@ -34,6 +72,33 @@ const AddressForm: React.FC = () => {
           placeholder="Calle 123, Ciudad"
         />
         <button className="rounded-xl bg-sky-600 text-white px-4" onClick={add}>Agregar</button>
+        {openSug && suggestions.length > 0 && (
+          <div className="absolute left-0 right-28 top-full mt-1 z-20 max-h-72 overflow-auto rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 shadow">
+            {suggestions.map((s) => (
+              <button
+                type="button"
+                key={s.place_id}
+                onClick={async () => {
+                  try {
+                    setLoading(true);
+                    const det = await geocodeByPlaceId(s.place_id);
+                    addStop({ address: det.normalized || s.description, lat: det.lat, lng: det.lng });
+                    setInput('');
+                    setSuggestions([]); setOpenSug(false);
+                    success('Dirección agregada');
+                  } catch (e) {
+                    console.error(e); error('No se pudo obtener detalles del lugar');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                <span className="text-sm">{s.description}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {errors && <p role="alert" className="mt-2 text-sm text-red-600">{errors}</p>}
       <div className="mt-4">
@@ -48,8 +113,13 @@ const AddressForm: React.FC = () => {
             try {
               setLoading(true);
               const text = await file.text();
-              const rows = await parseSimpleCSV(text);
-              success(`CSV importado: ${rows.length} filas`);
+              const rows: SimpleRow[] = await parseSimpleCSV(text);
+              const addrs = rows
+                .map((r: SimpleRow) => ({ address: (r.address || '').trim() }))
+                .filter((r) => r.address.length > 3);
+              const res: { address: string; lat: number; lng: number; normalized: string }[] = await geocodeAddresses(addrs);
+              res.forEach((g: { address: string; lat: number; lng: number; normalized: string }) => addStop({ address: g.normalized || g.address, lat: g.lat, lng: g.lng }));
+              success(`CSV importado: ${res.length} direcciones`);
             } catch (err) {
               console.error(err);
               error('Error al importar CSV');
@@ -60,7 +130,38 @@ const AddressForm: React.FC = () => {
         />
       </div>
       {loading && <Loader label="Procesando CSV…" />}
-      <button className="mt-4 w-full rounded-xl bg-emerald-600 text-white py-2">Calcular ruta óptima</button>
+      <button
+        className="mt-4 w-full rounded-xl bg-emerald-600 text-white py-2"
+        onClick={async () => {
+          if (stops.length < 2) {
+            error('Agrega al menos 2 paradas');
+            return;
+          }
+          try {
+            setLoading(true);
+            const pts = stops.map((s) => ({ lat: s.lat, lng: s.lng, address: s.address }));
+            const res = await calculateOptimizedRoute(pts);
+            const used = new Set<number>();
+            const ordered = (res.stops as { lat: number; lng: number; address: string }[]).map((st: { lat: number; lng: number; address: string }, idx: number) => {
+              const i = stops.findIndex((s, si: number) => !used.has(si) && Math.abs(s.lat - st.lat) < 1e-6 && Math.abs(s.lng - st.lng) < 1e-6);
+              const pick = i >= 0 ? (used.add(i), stops[i]) : { ...st, id: `${idx}` } as any;
+              return { ...pick, address: st.address, lat: st.lat, lng: st.lng, label: String(idx + 1) };
+            });
+            setStops(ordered);
+            if (typeof res.distance_km === 'number' && typeof res.duration_min === 'number') {
+              setRouteInfo({ distance_km: res.distance_km, duration_min: res.duration_min });
+            }
+            success('Ruta optimizada');
+          } catch (e) {
+            console.error(e);
+            error('No se pudo optimizar la ruta');
+          } finally {
+            setLoading(false);
+          }
+        }}
+      >
+        Calcular ruta óptima
+      </button>
     </div>
   );
 };

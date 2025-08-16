@@ -2,6 +2,7 @@ import React from 'react';
 import TopNav from '../components/TopNav';
 import AddressForm from '../components/AddressForm';
 import MapView from '../components/MapView';
+import RouteSummary from '../components/RouteSummary';
 import StopsList from '../components/StopsList';
 
 const Dashboard: React.FC = () => {
@@ -15,6 +16,7 @@ const Dashboard: React.FC = () => {
         </aside>
         <section className="md:col-span-2">
           <MapView height="520px" />
+          <RouteSummary />
         </section>
       </main>
     </div>
