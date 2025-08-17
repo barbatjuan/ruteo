@@ -7,8 +7,8 @@ export async function parseSimpleCSV(text: string): Promise<SimpleRow[]> {
     Papa.parse<SimpleRow>(text, {
       header: true,
       skipEmptyLines: true,
-      complete: (res) => resolve(res.data),
-      error: (err) => reject(err),
+      complete: (res: Papa.ParseResult<SimpleRow>) => resolve(res.data),
+      error: (err: unknown) => reject(err),
     });
   });
 }

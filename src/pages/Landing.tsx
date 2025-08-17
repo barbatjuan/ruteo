@@ -27,7 +27,7 @@ const Landing: React.FC = () => {
         <div className="mt-12 grid md:grid-cols-2 gap-8 items-center">
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 p-4">
             <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-              <MapView height="320px" demo />
+              <MapView height="320px" />
             </div>
           </div>
           <div>
