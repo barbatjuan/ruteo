@@ -1,6 +1,6 @@
 import React from 'react';
 import jsPDF from 'jspdf';
-import QRCode from 'qrcode';
+import * as QRCode from 'qrcode';
 
 const ExportButtons: React.FC = () => {
   const exportCSV = () => {
