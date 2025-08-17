@@ -14,7 +14,7 @@ const GoogleMapView: React.FC<{ height?: string; points?: LatLng[] }> = ({ heigh
   const mapEl = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
   const pts = useMemo(() => points && points.length ? points : demoPoints, [points]);
-  const [directions, setDirections] = useState<any>(null);
+  const [polylineObj, setPolylineObj] = useState<any>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,34 +44,24 @@ const GoogleMapView: React.FC<{ height?: string; points?: LatLng[] }> = ({ heigh
 
     if (pts.length === 0) return;
 
-    if (pts.length === 1) {
-      new g.maps.Marker({ position: { lat: pts[0].lat, lng: pts[0].lng }, label: pts[0].label ?? '1', map });
-      map.setCenter({ lat: pts[0].lat, lng: pts[0].lng });
-      return;
-    }
+    // Markers
+    pts.forEach((p, idx) => new g.maps.Marker({ position: { lat: p.lat, lng: p.lng }, label: p.label ?? String(idx + 1), map }));
 
-    // Directions (roads) with waypoint optimization
-    const origin = new g.maps.LatLng(pts[0].lat, pts[0].lng);
-    const destination = new g.maps.LatLng(pts[pts.length - 1].lat, pts[pts.length - 1].lng);
-    const waypoints = pts.slice(1, -1).map((p) => ({ location: new g.maps.LatLng(p.lat, p.lng), stopover: true }));
-    const service = new g.maps.DirectionsService();
-    const renderer = new g.maps.DirectionsRenderer({ map, suppressMarkers: false });
-    service.route({
-      origin,
-      destination,
-      waypoints,
-      optimizeWaypoints: true,
-      travelMode: g.maps.TravelMode.DRIVING,
-    }, (result: any, status: any) => {
-      if (status === 'OK' && result) {
-        renderer.setDirections(result);
-        setDirections(result);
-      } else {
-        console.warn('Directions request failed', status);
-        // fallback: markers
-        pts.forEach((p, idx) => new g.maps.Marker({ position: { lat: p.lat, lng: p.lng }, label: p.label ?? String(idx + 1), map }));
-      }
+    // Basic polyline connecting stops in provided order (no extra API call)
+    const path = pts.map((p) => ({ lat: p.lat, lng: p.lng }));
+    const pl = new g.maps.Polyline({
+      path,
+      geodesic: true,
+      strokeColor: '#1d4ed8',
+      strokeOpacity: 0.8,
+      strokeWeight: 4,
+      map,
     });
+    setPolylineObj(pl);
+    // Fit bounds to all points
+    const bounds = new g.maps.LatLngBounds();
+    path.forEach((ll) => bounds.extend(new g.maps.LatLng(ll.lat, ll.lng)));
+    map.fitBounds(bounds);
   }, [ready, pts]);
 
   return (

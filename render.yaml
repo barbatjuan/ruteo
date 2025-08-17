@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: ruteo-backend
+    env: node
+    rootDir: backend
+    buildCommand: "npm ci && npm run build"
+    startCommand: "npm run start"
+    autoDeploy: true
+    healthCheckPath: "/healthz"
+    plan: free
+    envVars:
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false # set in Render dashboard
+      - key: GOOGLE_MAPS_LANG
+        value: "es"
+      - key: GOOGLE_MAPS_REGION
+        value: "UY"
+      - key: CORS_ORIGINS
+        value: "https://ruteo-frontend.onrender.com"
+
+  - type: static
+    name: ruteo-frontend
+    rootDir: .
+    buildCommand: "npm ci && npm run build"
+    staticPublishPath: "dist"
+    autoDeploy: true
+    plan: free
+    envVars:
+      - key: VITE_API_URL
+        value: "https://ruteo-backend.onrender.com" # update to actual backend URL after first deploy if different
+      - key: VITE_TENANT_MODE
+        value: "header"
+      - key: VITE_GOOGLE_MAPS_API_KEY
+        sync: false # set in Render dashboard
+      - key: VITE_GOOGLE_MAPS_LANG
+        value: "es"
+      - key: VITE_GOOGLE_MAPS_REGION
+        value: "UY"

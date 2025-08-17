@@ -12,7 +12,7 @@ const StopsList: React.FC = () => {
         <ul className="space-y-1">
           {stops.map((s, idx) => (
             <li key={s.id} className="px-3 py-2 rounded-lg flex items-center justify-between bg-slate-50 dark:bg-slate-900/30">
-              <span>{idx + 1}. {s.address}</span>
+              <span>{(s.label ?? String(idx + 1))}. {s.address}</span>
               <button className="text-xs text-red-600" onClick={() => removeStop(s.id)}>Quitar</button>
             </li>
           ))}

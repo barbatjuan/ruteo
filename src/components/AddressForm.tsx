@@ -10,15 +10,23 @@ const AddressForm: React.FC = () => {
   const [errors, setErrors] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { success, error } = useToast();
-  const { addStop, stops, setStops, setRouteInfo } = useRoute();
+  const { addStop, stops, setStops, setRouteInfo, origin, setOrigin, roundTrip, setRoundTrip } = useRoute();
   const [suggestions, setSuggestions] = useState<{ description: string; place_id: string }[]>([]);
   const [openSug, setOpenSug] = useState(false);
   const debRef = useRef<number | undefined>(undefined);
   const boxRef = useRef<HTMLDivElement | null>(null);
 
+  // Origin autocomplete state
+  const [originInput, setOriginInput] = useState('');
+  const [originSuggestions, setOriginSuggestions] = useState<{ description: string; place_id: string }[]>([]);
+  const [openOriginSug, setOpenOriginSug] = useState(false);
+  const originDebRef = useRef<number | undefined>(undefined);
+  const originBoxRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
       if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpenSug(false);
+      if (originBoxRef.current && !originBoxRef.current.contains(e.target as Node)) setOpenOriginSug(false);
     };
     document.addEventListener('click', onDocClick);
     return () => document.removeEventListener('click', onDocClick);
@@ -35,6 +43,18 @@ const AddressForm: React.FC = () => {
       setOpenSug(res.length > 0);
     }, 250);
   }, [input]);
+
+  useEffect(() => {
+    window.clearTimeout(originDebRef.current);
+    if (!originInput || originInput.trim().length < 3) {
+      setOriginSuggestions([]); setOpenOriginSug(false); return;
+    }
+    originDebRef.current = window.setTimeout(async () => {
+      const res = await autocompletePlaces(originInput.trim());
+      setOriginSuggestions(res);
+      setOpenOriginSug(res.length > 0);
+    }, 250);
+  }, [originInput]);
 
   const add = async () => {
     if (!input || input.trim().length < 3) {
@@ -61,6 +81,70 @@ const AddressForm: React.FC = () => {
 
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
+      <h2 className="font-semibold mb-2">Origen</h2>
+      <div className="flex gap-2 items-center">
+        <div className="flex-1 relative" ref={originBoxRef}>
+          <input
+            aria-label="Origen"
+            className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-transparent px-3 py-2"
+            value={originInput}
+            onChange={(e) => setOriginInput(e.target.value)}
+            onKeyDown={async (e) => {
+              if (e.key === 'Enter' && originInput.trim().length >= 3) {
+                try {
+                  setLoading(true);
+                  const [g] = await geocodeAddresses([{ address: originInput }]);
+                  if (g) { setOrigin({ address: g.normalized || originInput, lat: g.lat, lng: g.lng }); setOriginInput(''); }
+                } catch {
+                  error('No se pudo geocodificar el origen');
+                } finally { setLoading(false); }
+              }
+            }}
+            placeholder="Depósito o punto de partida"
+          />
+          {openOriginSug && originSuggestions.length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-1 z-20 max-h-72 overflow-auto rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 shadow">
+              {originSuggestions.map((s) => (
+                <button
+                  type="button"
+                  key={s.place_id}
+                  onClick={async () => {
+                    try {
+                      setLoading(true);
+                      const det = await geocodeByPlaceId(s.place_id);
+                      setOrigin({ address: det.normalized || s.description, lat: det.lat, lng: det.lng });
+                      setOriginInput('');
+                      setOriginSuggestions([]); setOpenOriginSug(false);
+                      success('Origen establecido');
+                    } catch (e) {
+                      console.error(e); error('No se pudo obtener detalles del lugar');
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  <span className="text-sm">{s.description}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <button
+          className="rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2"
+          onClick={() => setOrigin(null)}
+        >
+          Limpiar
+        </button>
+      </div>
+      {origin && (
+        <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">Origen: {origin.address}</p>
+      )}
+      <div className="mt-3 flex items-center gap-2">
+        <input id="roundTrip" type="checkbox" checked={roundTrip} onChange={(e) => setRoundTrip(e.target.checked)} />
+        <label htmlFor="roundTrip" className="text-sm">Volver al origen</label>
+      </div>
+
       <h2 className="font-semibold mb-2">Direcciones rápidas</h2>
       <div className="flex gap-2 relative" ref={boxRef}>
         <input
@@ -140,12 +224,15 @@ const AddressForm: React.FC = () => {
           try {
             setLoading(true);
             const pts = stops.map((s) => ({ lat: s.lat, lng: s.lng, address: s.address }));
-            const res = await calculateOptimizedRoute(pts);
+            const res = await calculateOptimizedRoute(pts, { origin: origin || undefined, roundTrip });
             const used = new Set<number>();
+            let counter = 1;
             const ordered = (res.stops as { lat: number; lng: number; address: string }[]).map((st: { lat: number; lng: number; address: string }, idx: number) => {
               const i = stops.findIndex((s, si: number) => !used.has(si) && Math.abs(s.lat - st.lat) < 1e-6 && Math.abs(s.lng - st.lng) < 1e-6);
               const pick = i >= 0 ? (used.add(i), stops[i]) : { ...st, id: `${idx}` } as any;
-              return { ...pick, address: st.address, lat: st.lat, lng: st.lng, label: String(idx + 1) };
+              const isOrigin = !!origin && Math.abs(st.lat - origin.lat) < 1e-6 && Math.abs(st.lng - origin.lng) < 1e-6;
+              const label = isOrigin ? '0' : String(counter++);
+              return { ...pick, address: st.address, lat: st.lat, lng: st.lng, label };
             });
             setStops(ordered);
             if (typeof res.distance_km === 'number' && typeof res.duration_min === 'number') {
