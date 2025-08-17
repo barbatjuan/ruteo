@@ -17,6 +17,8 @@ import { RouteProvider } from './state/RouteContext';
 
 const router = createBrowserRouter([
   { path: '/', element: <Landing /> },
+  // Permite entrar a /:tenant directamente (ej: /acme)
+  { path: '/:tenant', element: <Dashboard /> },
   { path: '/:tenant/login', element: <Login /> },
   { path: '/:tenant/app', element: <Dashboard /> },
   { path: '/:tenant/clients', element: <Clients /> },
@@ -39,5 +41,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>
 );
 
-// Register PWA Service Worker
-registerSW();
+// Register PWA Service Worker only when enabled
+const ENABLE_SW = (import.meta as any).env?.VITE_ENABLE_SW;
+if ((import.meta as any).env?.PROD && ENABLE_SW !== 'false') {
+  registerSW();
+}

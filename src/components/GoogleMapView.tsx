@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Stop } from '../state/RouteContext';
 import { getGoogle } from '../lib/google';
+import { useRoute } from '../state/RouteContext';
 
 type LatLng = { lat: number; lng: number; label?: string };
 
@@ -15,6 +16,7 @@ const GoogleMapView: React.FC<{ height?: string; points?: LatLng[] }> = ({ heigh
   const [ready, setReady] = useState(false);
   const pts = useMemo(() => points && points.length ? points : demoPoints, [points]);
   const [polylineObj, setPolylineObj] = useState<any>(null);
+  const { optimizeWaypoints } = useRoute();
 
   useEffect(() => {
     let cancelled = false;
@@ -47,22 +49,47 @@ const GoogleMapView: React.FC<{ height?: string; points?: LatLng[] }> = ({ heigh
     // Markers
     pts.forEach((p, idx) => new g.maps.Marker({ position: { lat: p.lat, lng: p.lng }, label: p.label ?? String(idx + 1), map }));
 
-    // Basic polyline connecting stops in provided order (no extra API call)
-    const path = pts.map((p) => ({ lat: p.lat, lng: p.lng }));
-    const pl = new g.maps.Polyline({
-      path,
-      geodesic: true,
-      strokeColor: '#1d4ed8',
-      strokeOpacity: 0.8,
-      strokeWeight: 4,
-      map,
+    // If only one point, no route
+    if (pts.length === 1) {
+      map.setCenter({ lat: pts[0].lat, lng: pts[0].lng });
+      map.setZoom(14);
+      return;
+    }
+
+    // Directions along roads
+    const svc = new g.maps.DirectionsService();
+    const origin = new g.maps.LatLng(pts[0].lat, pts[0].lng);
+    const destination = new g.maps.LatLng(pts[pts.length - 1].lat, pts[pts.length - 1].lng);
+    const waypoints = pts.slice(1, -1).map((p: any) => ({ location: new g.maps.LatLng(p.lat, p.lng), stopover: true }));
+    const req: any = {
+      origin,
+      destination,
+      waypoints,
+      travelMode: g.maps.TravelMode.DRIVING,
+      optimizeWaypoints,
+      provideRouteAlternatives: false,
+    };
+
+    svc.route(req, (res: any, status: any) => {
+      if (status !== 'OK' || !res || !res.routes || !res.routes[0]) {
+        // Fallback: draw straight polyline if directions fail
+        const path = pts.map((p) => ({ lat: p.lat, lng: p.lng }));
+        const pl = new g.maps.Polyline({ path, geodesic: true, strokeColor: '#1d4ed8', strokeOpacity: 0.8, strokeWeight: 4, map });
+        setPolylineObj(pl);
+        const bounds = new g.maps.LatLngBounds();
+        path.forEach((ll) => bounds.extend(new g.maps.LatLng(ll.lat, ll.lng)));
+        map.fitBounds(bounds);
+        return;
+      }
+      const route = res.routes[0];
+      const overviewPath = route.overview_path as any[];
+      const pl = new g.maps.Polyline({ path: overviewPath, strokeColor: '#1d4ed8', strokeOpacity: 0.9, strokeWeight: 5, map });
+      setPolylineObj(pl);
+      const bounds = new g.maps.LatLngBounds();
+      overviewPath.forEach((ll: any) => bounds.extend(ll));
+      map.fitBounds(bounds);
     });
-    setPolylineObj(pl);
-    // Fit bounds to all points
-    const bounds = new g.maps.LatLngBounds();
-    path.forEach((ll) => bounds.extend(new g.maps.LatLng(ll.lat, ll.lng)));
-    map.fitBounds(bounds);
-  }, [ready, pts]);
+  }, [ready, pts, optimizeWaypoints]);
 
   return (
     <div className="w-full rounded-xl overflow-hidden" style={{ height }}>

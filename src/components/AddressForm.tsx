@@ -4,6 +4,8 @@ import { useToast } from '../state/ToastContext';
 import Loader from './Loader';
 import { useRoute } from '../state/RouteContext';
 import { geocodeAddresses, calculateOptimizedRoute, autocompletePlaces, geocodeByPlaceId } from '../lib/api';
+import Input from './ui/Input';
+import Button from './ui/Button';
 
 const AddressForm: React.FC = () => {
   const [input, setInput] = useState('');
@@ -81,12 +83,14 @@ const AddressForm: React.FC = () => {
 
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
-      <h2 className="font-semibold mb-2">Origen</h2>
-      <div className="flex gap-2 items-center">
+      <div className="space-y-2">
+        <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Configuración</h3>
+        <h2 className="font-semibold text-lg">Origen</h2>
+      </div>
+      <div className="mt-3 flex gap-2 items-center">
         <div className="flex-1 relative" ref={originBoxRef}>
-          <input
+          <Input
             aria-label="Origen"
-            className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-transparent px-3 py-2"
             value={originInput}
             onChange={(e) => setOriginInput(e.target.value)}
             onKeyDown={async (e) => {
@@ -130,12 +134,7 @@ const AddressForm: React.FC = () => {
             </div>
           )}
         </div>
-        <button
-          className="rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2"
-          onClick={() => setOrigin(null)}
-        >
-          Limpiar
-        </button>
+        <Button variant="secondary" onClick={() => setOrigin(null)}>Limpiar</Button>
       </div>
       {origin && (
         <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">Origen: {origin.address}</p>
@@ -145,17 +144,19 @@ const AddressForm: React.FC = () => {
         <label htmlFor="roundTrip" className="text-sm">Volver al origen</label>
       </div>
 
-      <h2 className="font-semibold mb-2">Direcciones rápidas</h2>
+      <div className="mt-6 space-y-2">
+        <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Ingresar direcciones</h3>
+        <h2 className="font-semibold text-lg">Direcciones rápidas</h2>
+      </div>
       <div className="flex gap-2 relative" ref={boxRef}>
-        <input
+        <Input
           aria-label="Nueva dirección"
-          className="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-transparent px-3 py-2"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add()}
           placeholder="Calle 123, Ciudad"
         />
-        <button className="rounded-xl bg-sky-600 text-white px-4" onClick={add}>Agregar</button>
+        <Button onClick={add}>Agregar</Button>
         {openSug && suggestions.length > 0 && (
           <div className="absolute left-0 right-28 top-full mt-1 z-20 max-h-72 overflow-auto rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 shadow">
             {suggestions.map((s) => (
@@ -185,12 +186,17 @@ const AddressForm: React.FC = () => {
         )}
       </div>
       {errors && <p role="alert" className="mt-2 text-sm text-red-600">{errors}</p>}
-      <div className="mt-4">
-        <label className="block text-sm font-medium">Importar CSV</label>
+      <div className="mt-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Importación</h3>
+            <div className="text-sm font-medium">Importar CSV</div>
+          </div>
+        </div>
         <input
           type="file"
           accept=".csv"
-          className="mt-1 block w-full text-sm"
+          className="mt-2 block w-full text-sm file:mr-3 file:rounded-lg file:border file:border-slate-300 dark:file:border-slate-700 file:px-3 file:py-2 file:bg-slate-50 dark:file:bg-slate-800 file:text-slate-700 dark:file:text-slate-200"
           onChange={async (e) => {
             const file = e.target.files?.[0];
             if (!file) return;
@@ -213,9 +219,9 @@ const AddressForm: React.FC = () => {
           }}
         />
       </div>
-      {loading && <Loader label="Procesando CSV…" />}
-      <button
-        className="mt-4 w-full rounded-xl bg-emerald-600 text-white py-2"
+      {loading && <Loader label="Procesando…" />}
+      <Button
+        className="mt-6 w-full"
         onClick={async () => {
           if (stops.length < 2) {
             error('Agrega al menos 2 paradas');
@@ -248,7 +254,7 @@ const AddressForm: React.FC = () => {
         }}
       >
         Calcular ruta óptima
-      </button>
+      </Button>
     </div>
   );
 };

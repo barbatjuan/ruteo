@@ -1,6 +1,6 @@
 import { storage } from './storage';
 
-export type ClientAddress = { id: string; label?: string; address: string };
+export type ClientAddress = { id: string; label?: string; address: string; lat?: number; lng?: number };
 export type Client = { id: string; name: string; phone?: string; notes?: string; addresses: ClientAddress[] };
 
 const KEY = 'clients';

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import TopNav from '../components/TopNav';
@@ -6,11 +6,13 @@ import Pricing from '../components/Pricing';
 import FAQ from '../components/FAQ';
 import Footer from '../components/Footer';
 import MapView from '../components/MapView';
+import LoginModal from '../components/LoginModal';
 
 const Landing: React.FC = () => {
+  const [loginOpen, setLoginOpen] = useState(false);
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-50 to-white dark:from-slate-900 dark:to-slate-950 text-slate-900 dark:text-slate-100">
-      <TopNav />
+      <TopNav onLoginClick={() => setLoginOpen(true)} showNavLinks={false} showThemeToggle={false} />
       <header className="max-w-7xl mx-auto px-6 pt-16 pb-10 text-center">
         <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="text-4xl md:text-6xl font-extrabold tracking-tight">
           Ruteo — Planificador de rutas para negocios ágiles
@@ -59,6 +61,7 @@ const Landing: React.FC = () => {
         <FAQ />
       </section>
       <Footer />
+      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </div>
   );
 };

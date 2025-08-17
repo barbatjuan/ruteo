@@ -1,19 +1,25 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ClientAddress, listClients, removeAddress, upsertAddress } from '../lib/clients';
+import React, { useEffect, useRef, useState } from 'react';
+import { ClientAddress } from '../lib/clients';
 import { useTenant } from '../state/TenantContext';
 import { useToast } from '../state/ToastContext';
-import { autocompletePlaces, geocodeByPlaceId } from '../lib/api';
+import { autocompletePlaces, geocodeByPlaceId, geocodeAddresses } from '../lib/api';
+import { listAddressesSB, removeAddressSB, upsertAddressSB } from '../lib/supabaseClients';
+import { useRoute } from '../state/RouteContext';
 
 const ClientAddresses: React.FC<{ clientId: string; onChange?: () => void }> = ({ clientId, onChange }) => {
-  const { resolveTenantFromLocation } = useTenant();
-  const tenant = resolveTenantFromLocation() ?? undefined;
+  const { tenantUuid } = useTenant();
   const { success, error } = useToast();
+  const { addStop } = useRoute();
   const [refresh, setRefresh] = useState(0);
+  const [addresses, setAddresses] = useState<ClientAddress[]>([]);
+  const [loading, setLoading] = useState(false);
   const [label, setLabel] = useState('');
   const [address, setAddress] = useState('');
   const [saving, setSaving] = useState(false);
   const [suggestions, setSuggestions] = useState<{ description: string; place_id: string }[]>([]);
   const [openSug, setOpenSug] = useState(false);
+  const [lat, setLat] = useState<number | undefined>(undefined);
+  const [lng, setLng] = useState<number | undefined>(undefined);
   const debRef = useRef<number | undefined>(undefined);
   const boxRef = useRef<HTMLDivElement | null>(null);
 
@@ -35,18 +41,50 @@ const ClientAddresses: React.FC<{ clientId: string; onChange?: () => void }> = (
       setSuggestions(res);
       setOpenSug(res.length > 0);
     }, 250);
+    // If user edits the address manually, clear lat/lng so we'll re-geocode on save
   }, [address]);
 
-  const client = useMemo(() => listClients(tenant).find(c => c.id === clientId)!, [tenant, clientId, refresh]);
-  const addresses = client?.addresses ?? [];
+  useEffect(() => {
+    // Clear lat/lng whenever the address text changes directly (not via suggestion click)
+    setLat(undefined);
+    setLng(undefined);
+  }, [address]);
+
+  useEffect(() => {
+    const load = async () => {
+      if (!tenantUuid) { setAddresses([]); return; }
+      try {
+        setLoading(true);
+        const rows = await listAddressesSB(clientId, tenantUuid);
+        setAddresses(rows);
+      } catch (e) {
+        console.error(e);
+        error('No se pudieron cargar las direcciones');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [tenantUuid, clientId, refresh]);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!address.trim()) { error('La dirección es obligatoria'); return; }
     try {
       setSaving(true);
-      upsertAddress(clientId, { label: label.trim() || undefined, address: address.trim() }, tenant);
+      if (!tenantUuid) { throw new Error('Tenant no definido'); }
+      let curLat = lat; let curLng = lng;
+      if (curLat === undefined || curLng === undefined) {
+        try {
+          const res = await geocodeAddresses([{ address: address.trim() }], tenantUuid);
+          if (res && res[0]) { curLat = res[0].lat; curLng = res[0].lng; }
+        } catch {
+          // keep undefined if geocode fails; we still store the address
+        }
+      }
+      await upsertAddressSB(clientId, { label: label.trim() || undefined, address: address.trim(), lat: curLat, lng: curLng }, tenantUuid);
       setLabel(''); setAddress('');
+      setLat(undefined); setLng(undefined);
       setRefresh(x=>x+1);
       onChange?.();
       success('Dirección guardada');
@@ -58,27 +96,65 @@ const ClientAddresses: React.FC<{ clientId: string; onChange?: () => void }> = (
     }
   };
 
-  const del = (id: string) => {
-    removeAddress(clientId, id, tenant);
-    setRefresh(x=>x+1);
-    onChange?.();
-    success('Dirección eliminada');
+  const del = async (id: string) => {
+    try {
+      if (!tenantUuid) { throw new Error('Tenant no definido'); }
+      await removeAddressSB(clientId, id, tenantUuid);
+      setRefresh(x=>x+1);
+      onChange?.();
+      success('Dirección eliminada');
+    } catch (e) {
+      console.error(e);
+      error('No se pudo eliminar la dirección');
+    }
   };
 
   return (
     <div className="mt-3">
       <h4 className="text-sm font-medium mb-2">Direcciones frecuentes</h4>
-      {addresses.length === 0 ? (
+      {loading ? (
+        <div className="text-sm text-slate-600 dark:text-slate-400">Cargando…</div>
+      ) : addresses.length === 0 ? (
         <div className="text-sm text-slate-600 dark:text-slate-400">Sin direcciones.</div>
       ) : (
         <ul className="divide-y divide-slate-200 dark:divide-slate-800">
           {addresses.map((a: ClientAddress) => (
             <li key={a.id} className="py-2 flex items-start justify-between gap-3">
-              <div>
-                <div className="font-medium text-sm">{a.label || 'Sin etiqueta'}</div>
-                <div className="text-xs text-slate-600 dark:text-slate-400">{a.address}</div>
+              <div className="min-w-0">
+                <div className="font-medium text-sm truncate">{a.label || 'Sin etiqueta'}</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400 truncate">{a.address}</div>
               </div>
-              <button onClick={() => del(a.id)} className="text-red-600 hover:underline text-xs">Eliminar</button>
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  onClick={async () => {
+                    try {
+                      let lat = a.lat; let lng = a.lng;
+                      if (lat === undefined || lng === undefined) {
+                        const res = await geocodeAddresses([{ address: a.address }], tenantUuid || undefined);
+                        if (res && res[0]) { lat = res[0].lat; lng = res[0].lng; }
+                        // Persist back if resolved
+                        if (lat !== undefined && lng !== undefined) {
+                          await upsertAddressSB(clientId, { id: a.id, label: a.label, address: a.address, lat, lng }, tenantUuid!);
+                          setRefresh((x) => x + 1);
+                        }
+                      }
+                      if (lat === undefined || lng === undefined) {
+                        error('No se pudo obtener coordenadas de la dirección');
+                        return;
+                      }
+                      addStop({ address: a.address, lat, lng, label: a.label });
+                      success('Cliente agregado a la ruta');
+                    } catch (e) {
+                      console.error(e);
+                      error('No se pudo agregar a la ruta');
+                    }
+                  }}
+                  className="text-emerald-700 hover:underline text-xs"
+                >
+                  Agregar a ruta
+                </button>
+                <button onClick={() => del(a.id)} className="text-red-600 hover:underline text-xs">Eliminar</button>
+              </div>
             </li>
           ))}
         </ul>
@@ -98,6 +174,7 @@ const ClientAddresses: React.FC<{ clientId: string; onChange?: () => void }> = (
                     try {
                       const det = await geocodeByPlaceId(s.place_id);
                       setAddress(det.normalized || s.description);
+                      setLat(det.lat); setLng(det.lng);
                     } catch {
                       setAddress(s.description);
                     } finally {
