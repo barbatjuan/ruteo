@@ -18,11 +18,11 @@ services:
       - key: CORS_ORIGINS
         value: "https://ruteo-frontend.onrender.com"
 
-  - type: static_site
+  - type: static
     name: ruteo-frontend
     rootDir: .
     buildCommand: "npm ci && npm run build"
-    staticPublishPath: "dist"
+    publishPath: "dist"
     autoDeploy: true
     plan: free
     envVars:
