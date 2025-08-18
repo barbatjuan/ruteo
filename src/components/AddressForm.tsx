@@ -83,9 +83,9 @@ const AddressForm: React.FC = () => {
 
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
-      <div className="space-y-2">
-        <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Configuración</h3>
-        <h2 className="font-semibold text-lg">Origen</h2>
+      <div className="space-y-2 mb-4">
+        <h3 className="text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">Configuración</h3>
+        <h2 className="font-semibold text-lg text-slate-900 dark:text-slate-100">Origen</h2>
       </div>
       <div className="mt-3 flex gap-2 items-center">
         <div className="flex-1 relative" ref={originBoxRef}>
@@ -126,7 +126,7 @@ const AddressForm: React.FC = () => {
                       setLoading(false);
                     }
                   }}
-                  className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100"
                 >
                   <span className="text-sm">{s.description}</span>
                 </button>
@@ -134,7 +134,7 @@ const AddressForm: React.FC = () => {
             </div>
           )}
         </div>
-        <Button variant="secondary" onClick={() => setOrigin(null)}>Limpiar</Button>
+        <Button variant="pillYellow" onClick={() => setOrigin(null)}>Limpiar</Button>
       </div>
       {origin && (
         <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">Origen: {origin.address}</p>
@@ -144,9 +144,9 @@ const AddressForm: React.FC = () => {
         <label htmlFor="roundTrip" className="text-sm">Volver al origen</label>
       </div>
 
-      <div className="mt-6 space-y-2">
-        <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Ingresar direcciones</h3>
-        <h2 className="font-semibold text-lg">Direcciones rápidas</h2>
+      <div className="mt-6 space-y-2 mb-4">
+        <h3 className="text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">Ingresar direcciones</h3>
+        <h2 className="font-semibold text-lg text-slate-900 dark:text-slate-100">Direcciones rápidas</h2>
       </div>
       <div className="flex gap-2 relative" ref={boxRef}>
         <Input
@@ -156,7 +156,7 @@ const AddressForm: React.FC = () => {
           onKeyDown={(e) => e.key === 'Enter' && add()}
           placeholder="Calle 123, Ciudad"
         />
-        <Button onClick={add}>Agregar</Button>
+        <Button variant="pillGreen" onClick={add}>Agregar</Button>
         {openSug && suggestions.length > 0 && (
           <div className="absolute left-0 right-28 top-full mt-1 z-20 max-h-72 overflow-auto rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 shadow">
             {suggestions.map((s) => (
@@ -177,7 +177,7 @@ const AddressForm: React.FC = () => {
                     setLoading(false);
                   }
                 }}
-                className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+                className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100"
               >
                 <span className="text-sm">{s.description}</span>
               </button>
@@ -187,10 +187,10 @@ const AddressForm: React.FC = () => {
       </div>
       {errors && <p role="alert" className="mt-2 text-sm text-red-600">{errors}</p>}
       <div className="mt-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Importación</h3>
-            <div className="text-sm font-medium">Importar CSV</div>
+            <h3 className="text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">Importación</h3>
+            <div className="text-sm font-medium text-slate-900 dark:text-slate-100">Importar CSV</div>
           </div>
         </div>
         <input
@@ -221,6 +221,7 @@ const AddressForm: React.FC = () => {
       </div>
       {loading && <Loader label="Procesando…" />}
       <Button
+        variant="pillGreen"
         className="mt-6 w-full"
         onClick={async () => {
           if (stops.length < 2) {

@@ -12,12 +12,14 @@ type RouteContextType = {
   setStops: (stops: Stop[]) => void;
   routeInfo: RouteInfo;
   setRouteInfo: (info: RouteInfo) => void;
+  routeLoading: boolean;
+  setRouteLoading: (v: boolean) => void;
   origin: Point | null;
   setOrigin: (p: Point | null) => void;
   roundTrip: boolean;
   setRoundTrip: (v: boolean) => void;
   optimizeWaypoints: boolean;
-  setOptimizeWaypoints: (v: boolean) => void;
+  setOptimizeWaypoints: React.Dispatch<React.SetStateAction<boolean>>;
 };
 
 const RouteContext = createContext<RouteContextType | undefined>(undefined);
@@ -27,6 +29,7 @@ function uid() { return Math.random().toString(36).slice(2); }
 export const RouteProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [stops, setStopsState] = useState<Stop[]>([]);
   const [routeInfo, setRouteInfo] = useState<RouteInfo>(null);
+  const [routeLoading, setRouteLoading] = useState<boolean>(false);
   const [origin, setOrigin] = useState<Point | null>(null);
   const [roundTrip, setRoundTrip] = useState<boolean>(false);
   const [optimizeWaypoints, setOptimizeWaypoints] = useState<boolean>(true);
@@ -36,7 +39,7 @@ export const RouteProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const clearStops = () => setStopsState([]);
   const setStops = (s: Stop[]) => setStopsState(s);
 
-  const value = useMemo(() => ({ stops, addStop, removeStop, clearStops, setStops, routeInfo, setRouteInfo, origin, setOrigin, roundTrip, setRoundTrip, optimizeWaypoints, setOptimizeWaypoints }), [stops, routeInfo, origin, roundTrip, optimizeWaypoints]);
+  const value = useMemo(() => ({ stops, addStop, removeStop, clearStops, setStops, routeInfo, setRouteInfo, routeLoading, setRouteLoading, origin, setOrigin, roundTrip, setRoundTrip, optimizeWaypoints, setOptimizeWaypoints }), [stops, routeInfo, routeLoading, origin, roundTrip, optimizeWaypoints]);
   return <RouteContext.Provider value={value}>{children}</RouteContext.Provider>;
 };
 

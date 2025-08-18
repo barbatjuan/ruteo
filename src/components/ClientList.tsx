@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import Button from './ui/Button';
 import { useTenant } from '../state/TenantContext';
 import { useToast } from '../state/ToastContext';
 import { Client } from '../lib/clients';
@@ -68,9 +69,9 @@ const ClientList: React.FC = () => {
     <div className="rounded-2xl border border-slate-300 dark:border-slate-700 p-4">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold text-slate-900 dark:text-slate-100">Clientes</h2>
-        <button onClick={() => setOpen(!open)} className="rounded-md bg-sky-600 text-white px-3 py-1 hover:bg-sky-700">
+        <Button size="sm" variant="pillBlue" onClick={() => setOpen(!open)}>
           {open ? 'Cerrar' : 'Nuevo'}
-        </button>
+        </Button>
       </div>
 
       {open && (
@@ -86,7 +87,7 @@ const ClientList: React.FC = () => {
           <EmptyState
             title="Sin clientes aún"
             description="Crea tu primer cliente para guardar direcciones frecuentes y acelerar tus rutas."
-            action={<button onClick={() => setOpen(true)} className="rounded-md bg-sky-600 text-white px-4 py-2 hover:bg-sky-700">Crear cliente</button>}
+            action={<Button variant="pillBlue" onClick={() => setOpen(true)}>Crear cliente</Button>}
           />
         </div>
       ) : (
@@ -97,7 +98,7 @@ const ClientList: React.FC = () => {
                 <th className="px-3 py-2 text-left text-sm font-semibold">Nombre</th>
                 <th className="px-3 py-2 text-left text-sm font-semibold">Teléfono</th>
                 <th className="px-3 py-2 text-left text-sm font-semibold">Notas</th>
-                <th className="px-3 py-2 text-left text-sm font-semibold">Direcciones</th>
+                <th className="px-3 py-2 text-left text-sm font-semibold">Dirección</th>
                 <th className="px-3 py-2 text-right text-sm font-semibold">Acciones</th>
               </tr>
             </thead>
@@ -108,10 +109,12 @@ const ClientList: React.FC = () => {
                     <td className="px-3 py-2 text-slate-900 dark:text-slate-100 font-medium">{c.name}</td>
                     <td className="px-3 py-2 text-slate-800 dark:text-slate-200">{c.phone || '-'}</td>
                     <td className="px-3 py-2 text-slate-800 dark:text-slate-200">{c.notes || '-'}</td>
-                    <td className="px-3 py-2 text-slate-800 dark:text-slate-200">{c.addresses.length}</td>
+                    <td className="px-3 py-2 text-slate-800 dark:text-slate-200 truncate max-w-[380px]">{c.addresses[0]?.address || '-'}</td>
                     <td className="px-3 py-2 text-right">
-                      <button onClick={() => startEdit(c)} className="text-sky-700 hover:underline text-sm mr-3">{openRow === c.id ? 'Cerrar' : 'Detalles'}</button>
-                      <button onClick={() => remove(c.id)} className="text-red-600 hover:underline text-sm">Eliminar</button>
+                      <div className="flex items-center gap-2 justify-end">
+                        <Button size="sm" variant="pillBlue" onClick={() => startEdit(c)}>{openRow === c.id ? 'Cerrar' : 'Detalles'}</Button>
+                        <Button size="sm" variant="pillRed" onClick={() => remove(c.id)}>Eliminar</Button>
+                      </div>
                     </td>
                   </tr>
                   {openRow === c.id && (
@@ -132,7 +135,7 @@ const ClientList: React.FC = () => {
                           </div>
                         </div>
                         <div className="mt-2 flex justify-end">
-                          <button onClick={saveEdit} className="rounded-md bg-sky-600 text-white px-3 py-1 text-sm hover:bg-sky-700">Guardar cambios</button>
+                          <Button size="sm" variant="pillGreen" onClick={saveEdit}>Guardar cambios</Button>
                         </div>
 
                         <div className="mt-3">

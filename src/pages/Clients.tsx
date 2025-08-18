@@ -1,7 +1,6 @@
-import React from 'react';
-import TopNav from '../components/TopNav';
+import React, { useEffect, useState } from 'react';
+import AppShell from '../components/AppShell';
 import ClientList from '../components/ClientList';
-import { useEffect, useState } from 'react';
 import { useTenant } from '../state/TenantContext';
 import { getSupabase } from '../lib/supabase';
 // Estas envs deben existir en Vite
@@ -10,13 +9,20 @@ const SUPABASE_ANON_KEY = (import.meta as any).env.VITE_SUPABASE_ANON_KEY as str
 
 const Clients: React.FC = () => {
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950">
-      <TopNav showOrgSwitcher />
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        <ClientList />
+    <AppShell>
+      <div className="p-4">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Clientes</h1>
+          <p className="text-slate-600 dark:text-slate-400">Gestiona tu base de clientes y direcciones</p>
+        </div>
+        
+        <div>
+          <ClientList />
+        </div>
+
         <TenantDebugPanel />
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 };
 

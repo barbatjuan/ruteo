@@ -11,7 +11,7 @@ const Modal: React.FC<{ open: boolean; onClose: () => void; title?: string; chil
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-3xl mx-4 rounded-2xl bg-white dark:bg-slate-900 shadow-soft border border-slate-200 dark:border-slate-800">
+      <div className="relative w-full max-w-md mx-4 rounded-2xl bg-white dark:bg-slate-900 shadow-soft border border-slate-200 dark:border-slate-800">
         {(title || onClose) && (
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center">
             <h3 className="text-lg font-semibold">{title}</h3>

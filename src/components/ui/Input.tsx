@@ -9,6 +9,8 @@ const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLI
       ref={ref}
       className={[
         'w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-transparent px-3 py-2 text-sm',
+        'text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-400',
+        'caret-emerald-600',
         'focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600',
         className,
       ].join(' ')}

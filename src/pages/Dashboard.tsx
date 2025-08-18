@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import TopNav from '../components/TopNav';
+import AppShell from '../components/AppShell';
 import AddressForm from '../components/AddressForm';
 import MapView from '../components/MapView';
 import RouteSummary from '../components/RouteSummary';
@@ -8,44 +8,57 @@ import ClientPicker from '../components/ClientPicker';
 import Card from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
 import Button from '../components/ui/Button';
+import { useRoute } from '../state/RouteContext';
 
 const Dashboard: React.FC = () => {
   const [openPicker, setOpenPicker] = useState(false);
+  const { clearStops, setOptimizeWaypoints } = useRoute();
+  
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-      <TopNav showOrgSwitcher />
-      <main className="max-w-7xl mx-auto px-4 py-6 grid md:grid-cols-3 gap-4">
-        <aside className="md:col-span-1 space-y-4">
-          <Card>
-            <SectionHeader title="Paradas">
-              <Button size="sm" onClick={() => setOpenPicker(true)}>Agregar cliente</Button>
-            </SectionHeader>
-            <div className="p-4 pt-0">
-              <AddressForm />
-            </div>
+    <AppShell>
+      <div className="p-4">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Dashboard</h1>
+          <p className="text-slate-600 dark:text-slate-400">Gestiona tus rutas y optimiza entregas</p>
+        </div>
+        
+        <div className="space-y-4">
+          {/* AddressForm y StopsList en una fila */}
+          <div className="grid lg:grid-cols-2 gap-4">
+            <Card>
+              <SectionHeader title="Configuración de ruta">
+                <Button size="sm" variant="pillGreen" className="rounded-lg mb-2" onClick={() => setOpenPicker(true)}>Agregar cliente</Button>
+              </SectionHeader>
+              <div className="p-4 pt-0">
+                <AddressForm />
+              </div>
+            </Card>
+            
+            <Card>
+              <SectionHeader title="Lista de paradas" />
+              <div className="p-4 pt-0">
+                <StopsList />
+              </div>
+            </Card>
+          </div>
+          
+          {/* Mapa full width */}
+          <Card className="overflow-hidden">
+            <MapView height="400px" />
           </Card>
+
+          {/* Resumen de ruta separado */}
           <Card>
-            <SectionHeader title="Lista de paradas" />
-            <div className="p-2">
-              <StopsList />
-            </div>
-          </Card>
-        </aside>
-        <section className="md:col-span-2 space-y-4">
-          <Card>
-            <SectionHeader title="Mapa" />
-            <div className="p-3">
-              <MapView height="520px" />
-            </div>
-            <div className="border-t border-slate-200 dark:border-slate-800 p-4">
+            <div className="p-4">
               <RouteSummary />
             </div>
           </Card>
-        </section>
-      </main>
+        </div>
+      </div>
       <ClientPicker open={openPicker} onClose={() => setOpenPicker(false)} />
-    </div>
+    </AppShell>
   );
 };
 
 export default Dashboard;
+
