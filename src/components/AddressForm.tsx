@@ -141,7 +141,7 @@ const AddressForm: React.FC = () => {
       )}
       <div className="mt-3 flex items-center gap-2">
         <input id="roundTrip" type="checkbox" checked={roundTrip} onChange={(e) => setRoundTrip(e.target.checked)} />
-        <label htmlFor="roundTrip" className="text-sm">Volver al origen</label>
+        <label htmlFor="roundTrip" className="text-sm text-slate-900 dark:text-slate-100">Volver al origen</label>
       </div>
 
       <div className="mt-6 space-y-2 mb-4">
@@ -196,7 +196,7 @@ const AddressForm: React.FC = () => {
         <input
           type="file"
           accept=".csv"
-          className="mt-2 block w-full text-sm file:mr-3 file:rounded-lg file:border file:border-slate-300 dark:file:border-slate-700 file:px-3 file:py-2 file:bg-slate-50 dark:file:bg-slate-800 file:text-slate-700 dark:file:text-slate-200"
+          className="mt-2 block w-full text-sm text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 file:mr-3 file:rounded-lg file:border file:border-slate-300 dark:file:border-slate-700 file:px-3 file:py-2 file:bg-slate-50 dark:file:bg-slate-800 file:text-slate-700 dark:file:text-slate-200"
           onChange={async (e) => {
             const file = e.target.files?.[0];
             if (!file) return;

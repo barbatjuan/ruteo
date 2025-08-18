@@ -44,7 +44,7 @@ const Dashboard: React.FC = () => {
           
           {/* Mapa full width */}
           <Card className="overflow-hidden">
-            <MapView height="400px" />
+            <MapView />
           </Card>
 
           {/* Resumen de ruta separado */}
