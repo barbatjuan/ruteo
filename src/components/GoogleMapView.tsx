@@ -124,7 +124,18 @@ const GoogleMapView: React.FC<{ height?: string; points?: LatLng[] }> = ({ heigh
           : new g.maps.LatLng(pts[pts.length - 1].lat, pts[pts.length - 1].lng);
         const waypoints = (returningToOrigin ? pts.slice(1, -1) : pts.slice(1, -1))
           .map((p: any) => ({ location: new g.maps.LatLng(p.lat, p.lng), stopover: true }));
-        const req: any = { origin, destination, waypoints, travelMode: g.maps.TravelMode.DRIVING, optimizeWaypoints, provideRouteAlternatives: false };
+        const req: any = {
+          origin,
+          destination,
+          waypoints,
+          travelMode: g.maps.TravelMode.DRIVING,
+          optimizeWaypoints,
+          provideRouteAlternatives: false,
+          drivingOptions: {
+            departureTime: new Date(),
+            trafficModel: g.maps.TrafficModel.BEST_GUESS,
+          },
+        };
 
         const currentId = ++requestIdRef.current;
         try { setRouteLoading(true); } catch {}
@@ -154,7 +165,7 @@ const GoogleMapView: React.FC<{ height?: string; points?: LatLng[] }> = ({ heigh
           try {
             const legs = route.legs || [];
             const totalMeters = legs.reduce((acc: number, l: any) => acc + (l.distance?.value || 0), 0);
-            const totalSecs = legs.reduce((acc: number, l: any) => acc + (l.duration?.value || 0), 0);
+            const totalSecs = legs.reduce((acc: number, l: any) => acc + (l.duration_in_traffic?.value ?? l.duration?.value ?? 0), 0);
             setRouteInfo({ distance_km: totalMeters / 1000, duration_min: totalSecs / 60 });
           } catch {}
           // Use DirectionsRenderer to draw the route to avoid flicker
