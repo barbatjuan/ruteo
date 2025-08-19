@@ -5,5 +5,11 @@
 :root { color-scheme: light dark; }
 
 html, body, #root { height: 100%; }
+body, #root { overflow-x: hidden; width: 100%; }
 
 /* Leaflet base CSS will load from node_modules via import in MapView */
+
+/* Hard clamps for Google Maps to avoid horizontal overflow on mobile */
+.gm-style { max-width: 100% !important; overflow: hidden !important; }
+.gm-style > div { max-width: 100% !important; }
+.gm-style .gmnoprint, .gm-style .gm-style-cc, .gm-style .gm-control-active { max-width: 100% !important; }

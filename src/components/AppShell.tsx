@@ -7,6 +7,11 @@ type Props = {
 };
 
 // Simple inline SVG line icons (currentColor)
+const IconMenu = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6" {...props}>
+    <path d="M3 6h18M3 12h18M3 18h18" />
+  </svg>
+);
 const IconDashboard = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5" {...props}>
     <path d="M3 13h8V3H3v10zM13 21h8V11h-8v10zM3 21h8v-6H3v6zM13 3v6h8V3h-8z" />
@@ -56,6 +61,16 @@ const AppShell: React.FC<Props> = ({ children }) => {
     setDark(isDark);
   }, []);
 
+  // Prevent background scroll when sidebar is open on mobile
+  useEffect(() => {
+    if (sidebarOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [sidebarOpen]);
+
   const toggleTheme = () => {
     const next = !dark;
     setDark(next);
@@ -70,9 +85,9 @@ const AppShell: React.FC<Props> = ({ children }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex overflow-x-hidden">
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 transition-transform duration-300 ease-in-out`}>
+      <aside id="app-sidebar" className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 transition-transform duration-300 ease-in-out`}>
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800">
@@ -84,7 +99,8 @@ const AppShell: React.FC<Props> = ({ children }) => {
             </Link>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              aria-label="Cerrar menú"
+              className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
               ✕
             </button>
@@ -164,15 +180,18 @@ const AppShell: React.FC<Props> = ({ children }) => {
       )}
 
       {/* Main content */}
-      <div className="flex-1 lg:ml-72">
-        {/* Mobile header */}
-        <header className="lg:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4">
+      <div className="flex-1 lg:ml-72 min-w-0">
+        {/* Mobile header (sticky) */}
+        <header className="lg:hidden sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-4 py-3">
           <div className="flex items-center justify-between">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              aria-label="Abrir menú"
+              aria-controls="app-sidebar"
+              aria-expanded={sidebarOpen}
+              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
             >
-              ☰
+              <IconMenu />
             </button>
             <Link to="/" className="font-bold text-xl text-slate-900 dark:text-white">
               Ruteo

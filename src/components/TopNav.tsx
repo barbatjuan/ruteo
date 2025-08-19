@@ -36,7 +36,7 @@ const TopNav: React.FC<Props> = ({ showOrgSwitcher, onLoginClick, showNavLinks =
   }, []);
 
   return (
-    <nav className="sticky top-0 z-40 backdrop-blur bg-white/70 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800">
+    <nav className="sticky top-0 z-50 backdrop-blur bg-white/70 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800">
       <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link to="/" className="font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-sky-600">Ruteo</Link>
@@ -84,28 +84,14 @@ const TopNav: React.FC<Props> = ({ showOrgSwitcher, onLoginClick, showNavLinks =
             </button>
           )}
           {!user ? (
-            <button
-              onClick={() => onLoginClick ? onLoginClick() : nav(`/${tenant ?? 'acme'}/login`)}
-              className="group relative w-10 h-10 rounded-full border-2 border-emerald-500/30 bg-transparent hover:border-emerald-400 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
-              aria-label="Iniciar sesión"
+            <Button
+              size="sm"
+              variant="pillGreen"
+              className="h-8 px-3 py-0"
+              onClick={() => (onLoginClick ? onLoginClick() : nav(`/${tenant ?? 'acme'}/login`))}
             >
-              <div className="absolute inset-0 rounded-full bg-emerald-500/5 group-hover:bg-emerald-500/10 transition-all duration-300"></div>
-              <div className="relative flex items-center justify-center h-full">
-                <svg 
-                  className="w-5 h-5 text-emerald-600 dark:text-emerald-400 transition-all duration-300 group-hover:scale-110 group-hover:text-emerald-500" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={2.5} 
-                    d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9"
-                  />
-                </svg>
-              </div>
-            </button>
+              Ingresar
+            </Button>
           ) : (
             <div className="relative" ref={menuRef}>
               <button
@@ -120,15 +106,15 @@ const TopNav: React.FC<Props> = ({ showOrgSwitcher, onLoginClick, showNavLinks =
                 <span className="hidden sm:block text-sm max-w-[140px] truncate">{user.email}</span>
               </button>
               {menuOpen && (
-                <div role="menu" className="absolute right-0 mt-2 w-48 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg py-1">
+                <div role="menu" className="absolute right-0 mt-2 w-48 z-50 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg py-1">
                   <button
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+                    className="w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                     onClick={() => { setMenuOpen(false); nav(`/${tenant ?? 'acme'}/app`); }}
                   >
                     Ir al dashboard
                   </button>
                   <button
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+                    className="w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                     onClick={() => { setMenuOpen(false); logout(); nav('/'); }}
                   >
                     Cerrar sesión

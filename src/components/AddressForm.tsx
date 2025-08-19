@@ -17,6 +17,7 @@ const AddressForm: React.FC = () => {
   const [openSug, setOpenSug] = useState(false);
   const debRef = useRef<number | undefined>(undefined);
   const boxRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Origin autocomplete state
   const [originInput, setOriginInput] = useState('');
@@ -24,6 +25,7 @@ const AddressForm: React.FC = () => {
   const [openOriginSug, setOpenOriginSug] = useState(false);
   const originDebRef = useRef<number | undefined>(undefined);
   const originBoxRef = useRef<HTMLDivElement | null>(null);
+  const originInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -72,6 +74,9 @@ const AddressForm: React.FC = () => {
       const g = res[0];
       addStop({ address: g.normalized || input, lat: g.lat, lng: g.lng });
       setInput('');
+      setSuggestions([]);
+      setOpenSug(false);
+      try { inputRef.current?.blur(); } catch {}
       success('Dirección agregada');
     } catch (e) {
       console.error(e);
@@ -82,23 +87,30 @@ const AddressForm: React.FC = () => {
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 w-full max-w-full overflow-hidden">
       <div className="space-y-2 mb-4">
         <h3 className="text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">Configuración</h3>
         <h2 className="font-semibold text-lg text-slate-900 dark:text-slate-100">Origen</h2>
       </div>
-      <div className="mt-3 flex gap-2 items-center">
-        <div className="flex-1 relative" ref={originBoxRef}>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row items-stretch sm:items-center min-w-0">
+        <div className="flex-1 relative min-w-0" ref={originBoxRef}>
           <Input
             aria-label="Origen"
             value={originInput}
+            ref={originInputRef}
             onChange={(e) => setOriginInput(e.target.value)}
             onKeyDown={async (e) => {
               if (e.key === 'Enter' && originInput.trim().length >= 3) {
                 try {
                   setLoading(true);
                   const [g] = await geocodeAddresses([{ address: originInput }]);
-                  if (g) { setOrigin({ address: g.normalized || originInput, lat: g.lat, lng: g.lng }); setOriginInput(''); }
+                  if (g) {
+                    setOrigin({ address: g.normalized || originInput, lat: g.lat, lng: g.lng });
+                    setOriginInput('');
+                    setOriginSuggestions([]);
+                    setOpenOriginSug(false);
+                    try { originInputRef.current?.blur(); } catch {}
+                  }
                 } catch {
                   error('No se pudo geocodificar el origen');
                 } finally { setLoading(false); }
@@ -119,6 +131,7 @@ const AddressForm: React.FC = () => {
                       setOrigin({ address: det.normalized || s.description, lat: det.lat, lng: det.lng });
                       setOriginInput('');
                       setOriginSuggestions([]); setOpenOriginSug(false);
+                      try { originInputRef.current?.blur(); } catch {}
                       success('Origen establecido');
                     } catch (e) {
                       console.error(e); error('No se pudo obtener detalles del lugar');
@@ -134,13 +147,13 @@ const AddressForm: React.FC = () => {
             </div>
           )}
         </div>
-        <Button variant="pillYellow" onClick={() => setOrigin(null)}>Limpiar</Button>
+        <Button variant="pillYellow" full onClick={() => setOrigin(null)}>Limpiar</Button>
       </div>
       {origin && (
         <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">Origen: {origin.address}</p>
       )}
       <div className="mt-3 flex items-center gap-2">
-        <input id="roundTrip" type="checkbox" checked={roundTrip} onChange={(e) => setRoundTrip(e.target.checked)} />
+        <input id="roundTrip" type="checkbox" className="w-5 h-5" checked={roundTrip} onChange={(e) => setRoundTrip(e.target.checked)} />
         <label htmlFor="roundTrip" className="text-sm text-slate-900 dark:text-slate-100">Volver al origen</label>
       </div>
 
@@ -148,17 +161,18 @@ const AddressForm: React.FC = () => {
         <h3 className="text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">Ingresar direcciones</h3>
         <h2 className="font-semibold text-lg text-slate-900 dark:text-slate-100">Direcciones rápidas</h2>
       </div>
-      <div className="flex gap-2 relative" ref={boxRef}>
+      <div className="flex flex-col sm:flex-row gap-2 relative min-w-0" ref={boxRef}>
         <Input
           aria-label="Nueva dirección"
           value={input}
+          ref={inputRef}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add()}
           placeholder="Calle 123, Ciudad"
         />
-        <Button variant="pillGreen" onClick={add}>Agregar</Button>
+        <Button variant="pillGreen" full onClick={add}>Agregar</Button>
         {openSug && suggestions.length > 0 && (
-          <div className="absolute left-0 right-28 top-full mt-1 z-20 max-h-72 overflow-auto rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 shadow">
+          <div className="absolute left-0 right-0 sm:right-28 top-full mt-1 z-20 max-h-72 overflow-auto rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 shadow">
             {suggestions.map((s) => (
               <button
                 type="button"
@@ -170,6 +184,7 @@ const AddressForm: React.FC = () => {
                     addStop({ address: det.normalized || s.description, lat: det.lat, lng: det.lng });
                     setInput('');
                     setSuggestions([]); setOpenSug(false);
+                    try { inputRef.current?.blur(); } catch {}
                     success('Dirección agregada');
                   } catch (e) {
                     console.error(e); error('No se pudo obtener detalles del lugar');
