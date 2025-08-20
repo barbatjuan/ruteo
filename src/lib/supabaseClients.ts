@@ -177,3 +177,69 @@ export async function createTenantAndOwner(data: {
     return { success: false, error: e.message || 'Error inesperado' };
   }
 }
+
+// ==============================
+// Team management (tenant_memberships)
+// ==============================
+
+type TeamRole = 'Owner' | 'Admin' | 'Dispatcher' | 'Driver';
+type TeamStatus = 'active' | 'invited' | 'inactive';
+
+// List team members for a tenant. Note: auth.users email/name is not directly readable from client without a secure RPC.
+// We return placeholders for email/name until a secure function/view is added.
+export async function listTeamMembers(tenantUuid: string): Promise<{
+  user_id: string;
+  email: string;
+  name?: string;
+  role: TeamRole;
+  created_at: string;
+  status: TeamStatus;
+}[]> {
+  const sb = getSupabase(tenantUuid);
+  const { data, error } = await sb
+    .from('tenant_memberships')
+    .select('user_id, role, created_at')
+    .eq('tenant_uuid', tenantUuid)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  const rows = (data as any[]) || [];
+  return rows.map((r) => ({
+    user_id: r.user_id,
+    email: '', // TODO: Replace with secure RPC to fetch email
+    name: undefined, // TODO: Replace with secure RPC to fetch name/metadata
+    role: r.role as TeamRole,
+    created_at: r.created_at,
+    status: 'active' as TeamStatus,
+  }));
+}
+
+// Invite a new member. From the public client we cannot create Auth users without affecting current session.
+// Implement a serverless function or use service role on backend. For now, we surface a clear error.
+export async function inviteTeamMember(_params: {
+  tenantUuid: string;
+  email: string;
+  name?: string;
+  role: TeamRole;
+}): Promise<void> {
+  throw new Error('Invitaciones no implementadas desde el cliente. Requiere función segura (Edge/Backend) para crear usuario y enviar email.');
+}
+
+export async function updateMemberRole(tenantUuid: string, userId: string, newRole: TeamRole): Promise<void> {
+  const sb = getSupabase(tenantUuid);
+  const { error } = await sb
+    .from('tenant_memberships')
+    .update({ role: newRole })
+    .eq('tenant_uuid', tenantUuid)
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
+export async function removeMemberFromTeam(tenantUuid: string, userId: string): Promise<void> {
+  const sb = getSupabase(tenantUuid);
+  const { error } = await sb
+    .from('tenant_memberships')
+    .delete()
+    .eq('tenant_uuid', tenantUuid)
+    .eq('user_id', userId);
+  if (error) throw error;
+}
