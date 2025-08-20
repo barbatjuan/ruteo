@@ -6,23 +6,26 @@ const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | un
 
 const cache = new Map<string, SupabaseClient>();
 
-export function getSupabase(tenantId?: string): SupabaseClient {
+export function getSupabase(tenantUuid?: string): SupabaseClient {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     throw new Error('Faltan VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY en el entorno');
   }
-  const key = tenantId || '__no_tenant__';
+  const key = tenantUuid || '__no_tenant__';
   const cached = cache.get(key);
   if (cached) return cached;
   const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: {
-      // Importante: usar el header en minúsculas 'x-tenant-id'.
-      // Mantenemos también la variante en mayúsculas por compatibilidad.
-      headers: tenantId
+      // Importante: usar el header 'x-tenant-uuid' (minúsculas) para RLS.
+      // Dejamos los headers antiguos de forma temporal por compatibilidad.
+      headers: tenantUuid
         ? {
-            'x-tenant-id': tenantId,
-            'X-Tenant-Id': tenantId,
+            'x-tenant-uuid': tenantUuid,
+            'X-Tenant-UUID': tenantUuid,
+            // Compat: headers anteriores (se pueden retirar más adelante)
+            'x-tenant-id': tenantUuid,
+            'X-Tenant-Id': tenantUuid,
             // Header permitido por CORS de Supabase; lo aprovechamos para transportar el tenant
-            'X-Client-Info': `ruteo;tenant=${tenantId}`,
+            'X-Client-Info': `ruteo;tenant_uuid=${tenantUuid}`,
           }
         : {},
       // Wrapper de fetch para depuración: ver los headers que realmente salen del navegador.

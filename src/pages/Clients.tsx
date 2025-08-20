@@ -54,8 +54,11 @@ function TenantDebugPanel() {
             apikey: SUPABASE_ANON_KEY,
             Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
             'content-type': 'application/json',
-            'x-tenant-id': tenantUuid,
-            'X-Tenant-Id': tenantUuid,
+            // Header correcto para RLS
+            'x-tenant-uuid': tenantUuid,
+            'X-Tenant-UUID': tenantUuid,
+            // CORS-safe header permitido por Supabase: usamos como fallback
+            'X-Client-Info': `ruteo;tenant_uuid=${tenantUuid}`,
           } as any,
           body: '{}',
         });
@@ -80,7 +83,7 @@ function TenantDebugPanel() {
       <div><strong>Tenant UUID (cliente):</strong> {tenantLoading ? 'Resolviendo…' : (tenantUuid || 'null')}</div>
       <div><strong>current_tenant_uuid() (servidor):</strong> {serverSeenUuid ?? 'null'} {rpcError ? ` | error: ${rpcError}` : ''}</div>
       <div><strong>current_tenant_uuid() (fetch directo):</strong> {directSeenUuid ?? 'null'} {directError ? ` | error: ${directError}` : ''}</div>
-      <div className="opacity-70">Este panel es temporal para depurar el header X-Tenant-Id.</div>
+      <div className="opacity-70">Este panel es temporal para depurar el header X-Tenant-UUID.</div>
     </div>
   );
 }

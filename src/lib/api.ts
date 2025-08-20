@@ -7,9 +7,13 @@ const GOOGLE_REGION = (import.meta.env.VITE_GOOGLE_MAPS_REGION as string | undef
 const PLACES_LOCATION_BIAS = (import.meta.env.VITE_PLACES_LOCATION_BIAS as string | undefined) || '';
 const PLACES_RADIUS_METERS = +(import.meta.env.VITE_PLACES_RADIUS_METERS as string | undefined || '0');
 
-function headers(tenantId?: string, token?: string) {
+function headers(tenantUuid?: string, token?: string) {
   const h: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (tenantId && (import.meta.env.VITE_TENANT_MODE === 'header' || !BASE)) h['X-Tenant-Id'] = tenantId;
+  // Enviar el nuevo header de tenant UUID. Mantener el antiguo por compat temporal.
+  if (tenantUuid && (import.meta.env.VITE_TENANT_MODE === 'header' || !BASE)) {
+    h['x-tenant-uuid'] = tenantUuid;
+    h['X-Tenant-Id'] = tenantUuid; // compat
+  }
   if (token) h['Authorization'] = `Bearer ${token}`;
   return h;
 }
@@ -21,10 +25,12 @@ export async function autocompletePlaces(query: string) {
   if (BASE) {
     try {
       const res = await fetch(`${BASE}/places/autocomplete?q=${encodeURIComponent(query)}`);
-      if (!res.ok) return [];
-      return (await res.json()) as { description: string; place_id: string }[];
+      if (res.ok) {
+        return (await res.json()) as { description: string; place_id: string }[];
+      }
+      // fallthrough to Google client if backend route not available
     } catch {
-      return [];
+      // fallthrough to Google client
     }
   }
   if (!GOOGLE_KEY || typeof window === 'undefined') return [];
@@ -73,8 +79,13 @@ export async function geocodeByPlaceId(placeId: string) {
   if (!placeId) throw new Error('placeId requerido');
   // Prefer backend if it exposes a place-details endpoint
   if (BASE) {
-    const res = await fetch(`${BASE}/places/details?place_id=${encodeURIComponent(placeId)}`);
-    return res.json();
+    try {
+      const res = await fetch(`${BASE}/places/details?place_id=${encodeURIComponent(placeId)}`);
+      if (res.ok) return res.json();
+      // fallthrough to Google client
+    } catch {
+      // fallthrough to Google client
+    }
   }
   if (!GOOGLE_KEY || typeof window === 'undefined') throw new Error('Falta GOOGLE_MAPS_API_KEY');
   const google = await getGoogle(GOOGLE_KEY, GOOGLE_LANG, GOOGLE_REGION);
@@ -99,8 +110,13 @@ export async function geocodeByPlaceId(placeId: string) {
 export async function geocodeAddresses(addresses: { address: string }[], tenantId?: string) {
   // Prefer custom backend if provided
   if (BASE) {
-    const res = await fetch(`${BASE}/geocode`, { method: 'POST', headers: headers(tenantId), body: JSON.stringify(addresses) });
-    return res.json();
+    try {
+      const res = await fetch(`${BASE}/geocode`, { method: 'POST', headers: headers(tenantId), body: JSON.stringify(addresses) });
+      if (res.ok) return res.json();
+      // fallthrough to Google client
+    } catch {
+      // fallthrough to Google client
+    }
   }
   // Use Google Maps JS Geocoder to avoid CORS
   if (GOOGLE_KEY && typeof window !== 'undefined') {

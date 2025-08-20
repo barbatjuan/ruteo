@@ -20,23 +20,30 @@ function toClient(row: any): Client {
 
 export async function listClientsSB(tenantUuid: string): Promise<Client[]> {
   const sb = getSupabase(tenantUuid);
-  const { data, error } = await sb
-    .from('clients')
-    .select('id, name, phone, notes, created_at, client_addresses(id, label, address, lat, lng)')
-    .order('created_at', { ascending: false });
+  // Usamos RPC para fijar tenant en la sesión del request (sin depender de headers)
+  const { data, error } = await sb.rpc('list_clients', { p_tenant: tenantUuid });
   if (error) throw error;
-  return (data || []).map(toClient);
+  const rows = (data as any[]) || [];
+  // Cargamos direcciones por cliente vía RPC también
+  const result: Client[] = [];
+  for (const row of rows) {
+    const addresses = await listAddressesSB(row.id, tenantUuid);
+    result.push({ id: row.id, name: row.name, phone: row.phone ?? undefined, notes: row.notes ?? undefined, addresses });
+  }
+  return result;
 }
 
 export async function createClientSB(input: { name: string; phone?: string; notes?: string }, tenantUuid: string): Promise<Client> {
   const sb = getSupabase(tenantUuid);
-  const { data, error } = await sb
-    .from('clients')
-    .insert([{ name: input.name, phone: input.phone ?? null, notes: input.notes ?? null }])
-    .select('id, name, phone, notes, client_addresses(id, label, address, lat, lng)')
-    .single();
+  const { data, error } = await sb.rpc('create_client', {
+    p_tenant: tenantUuid,
+    p_name: input.name,
+    p_phone: input.phone ?? null,
+    p_notes: input.notes ?? null,
+  });
   if (error) throw error;
-  return toClient(data);
+  const row = data as any;
+  return { id: row.id, name: row.name, phone: row.phone ?? undefined, notes: row.notes ?? undefined, addresses: [] };
 }
 
 export async function updateClientSB(update: { id: string; name?: string; phone?: string; notes?: string }, tenantUuid: string): Promise<void> {
@@ -57,18 +64,33 @@ export async function deleteClientSB(id: string, tenantUuid: string): Promise<vo
 
 export async function listAddressesSB(clientId: string, tenantUuid: string): Promise<ClientAddress[]> {
   const sb = getSupabase(tenantUuid);
-  const { data, error } = await sb.from('client_addresses').select('id, label, address, lat, lng').eq('client_id', clientId).order('created_at', { ascending: true });
+  const { data, error } = await sb.rpc('list_client_addresses', { p_tenant: tenantUuid, p_client_id: clientId });
   if (error) throw error;
-  return (data || []).map((a: any) => ({ id: a.id, label: a.label ?? undefined, address: a.address, lat: a.lat ?? undefined, lng: a.lng ?? undefined }));
+  return ((data as any[]) || []).map((a: any) => ({ id: a.id, label: a.label ?? undefined, address: a.address, lat: a.lat ?? undefined, lng: a.lng ?? undefined }));
 }
 
 export async function upsertAddressSB(clientId: string, addr: { id?: string; label?: string; address: string; lat?: number; lng?: number }, tenantUuid: string): Promise<void> {
   const sb = getSupabase(tenantUuid);
   if (!addr.id) {
-    const { error } = await sb.from('client_addresses').insert([{ client_id: clientId, label: addr.label ?? null, address: addr.address, lat: addr.lat ?? null, lng: addr.lng ?? null }]);
+    const { error } = await sb.rpc('insert_client_address', {
+      p_tenant: tenantUuid,
+      p_client_id: clientId,
+      p_label: addr.label ?? null,
+      p_address: addr.address,
+      p_lat: addr.lat ?? null,
+      p_lng: addr.lng ?? null,
+    });
     if (error) throw error;
   } else {
-    const { error } = await sb.from('client_addresses').update({ label: addr.label ?? null, address: addr.address, lat: addr.lat ?? null, lng: addr.lng ?? null }).eq('id', addr.id).eq('client_id', clientId);
+    const { error } = await sb.rpc('update_client_address', {
+      p_tenant: tenantUuid,
+      p_id: addr.id,
+      p_client_id: clientId,
+      p_label: addr.label ?? null,
+      p_address: addr.address,
+      p_lat: addr.lat ?? null,
+      p_lng: addr.lng ?? null,
+    });
     if (error) throw error;
   }
 }
