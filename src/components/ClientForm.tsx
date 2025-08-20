@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createClientSB, upsertAddressSB } from '../lib/supabaseClients';
+import { autocompletePlaces, geocodeByPlaceId } from '../lib/api';
 import { useTenant } from '../state/TenantContext';
 import { useToast } from '../state/ToastContext';
 
@@ -12,6 +13,31 @@ const ClientForm: React.FC<{ onCreated?: () => void }> = ({ onCreated }) => {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [addr, setAddr] = useState('');
+  const [suggestions, setSuggestions] = useState<{ description: string; place_id: string }[]>([]);
+  const [openSug, setOpenSug] = useState(false);
+  const debRef = useRef<number | undefined>(undefined);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpenSug(false);
+    };
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  }, []);
+
+  useEffect(() => {
+    window.clearTimeout(debRef.current);
+    if (!addr || addr.trim().length < 3) {
+      setSuggestions([]); setOpenSug(false); return;
+    }
+    debRef.current = window.setTimeout(async () => {
+      const res = await autocompletePlaces(addr.trim());
+      setSuggestions(res);
+      setOpenSug(res.length > 0);
+    }, 250);
+  }, [addr]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,9 +78,38 @@ const ClientForm: React.FC<{ onCreated?: () => void }> = ({ onCreated }) => {
         <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Nombre</label>
         <input className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 px-3 py-2" value={name} onChange={(e)=>setName(e.target.value)} />
       </div>
-      <div>
+      <div ref={boxRef} className="relative">
         <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Dirección</label>
-        <input className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 px-3 py-2" value={addr} onChange={(e)=>setAddr(e.target.value)} placeholder="Calle 123, Ciudad" />
+        <input
+          ref={inputRef}
+          className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 px-3 py-2"
+          value={addr}
+          onChange={(e)=>setAddr(e.target.value)}
+          placeholder="Calle 123, Ciudad"
+        />
+        {openSug && suggestions.length > 0 && (
+          <div className="absolute left-0 right-0 top-full mt-1 z-20 max-h-72 overflow-auto rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 shadow">
+            {suggestions.map((s) => (
+              <button
+                type="button"
+                key={s.place_id}
+                onClick={async () => {
+                  try {
+                    const det = await geocodeByPlaceId(s.place_id);
+                    setAddr(det.normalized || s.description);
+                    setSuggestions([]); setOpenSug(false);
+                    try { inputRef.current?.blur(); } catch {}
+                  } catch (e) {
+                    // ignore
+                  }
+                }}
+                className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100"
+              >
+                <span className="text-sm">{s.description}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
