@@ -100,3 +100,80 @@ export async function removeAddressSB(clientId: string, addressId: string, tenan
   const { error } = await sb.from('client_addresses').delete().eq('id', addressId).eq('client_id', clientId);
   if (error) throw error;
 }
+
+// Create tenant and owner user
+export async function createTenantAndOwner(data: {
+  companyName: string;
+  companySlug: string;
+  plan: 'Free' | 'Pro' | 'Business';
+  ownerName: string;
+  ownerEmail: string;
+  ownerPassword: string;
+}) {
+  try {
+    const sb = getSupabase();
+    
+    // 1. Check if slug is available
+    const { data: existingTenant } = await sb
+      .from('tenants')
+      .select('slug')
+      .eq('slug', data.companySlug)
+      .single();
+    
+    if (existingTenant) {
+      return { success: false, error: 'El identificador ya está en uso' };
+    }
+
+    // 2. Create user account first
+    const { data: authData, error: authError } = await sb.auth.signUp({
+      email: data.ownerEmail,
+      password: data.ownerPassword,
+      options: {
+        data: {
+          name: data.ownerName,
+        }
+      }
+    });
+
+    if (authError || !authData.user) {
+      return { success: false, error: authError?.message || 'Error al crear usuario' };
+    }
+
+    // 3. Create tenant
+    const { data: tenant, error: tenantError } = await sb
+      .from('tenants')
+      .insert({
+        slug: data.companySlug,
+        name: data.companyName,
+        plan: data.plan,
+      })
+      .select()
+      .single();
+
+    if (tenantError || !tenant) {
+      return { success: false, error: tenantError?.message || 'Error al crear empresa' };
+    }
+
+    // 4. Create tenant membership (Owner role)
+    const { error: membershipError } = await sb
+      .from('tenant_memberships')
+      .insert({
+        user_id: authData.user.id,
+        tenant_uuid: tenant.uuid_id,
+        role: 'Owner',
+      });
+
+    if (membershipError) {
+      return { success: false, error: membershipError.message || 'Error al asignar rol' };
+    }
+
+    return { 
+      success: true, 
+      tenant: tenant,
+      user: authData.user 
+    };
+  } catch (e: any) {
+    console.error('createTenantAndOwner error:', e);
+    return { success: false, error: e.message || 'Error inesperado' };
+  }
+}

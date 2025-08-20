@@ -92,8 +92,8 @@ const AddressForm: React.FC = () => {
         <h3 className="text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">Configuración</h3>
         <h2 className="font-semibold text-lg text-slate-900 dark:text-slate-100">Origen</h2>
       </div>
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row items-stretch sm:items-center min-w-0">
-        <div className="flex-1 relative min-w-0" ref={originBoxRef}>
+      <div className="mt-3 flex flex-col gap-2 items-stretch min-w-0">
+        <div className="relative min-w-0" ref={originBoxRef}>
           <Input
             aria-label="Origen"
             value={originInput}
@@ -147,7 +147,9 @@ const AddressForm: React.FC = () => {
             </div>
           )}
         </div>
-        <Button variant="pillYellow" full onClick={() => setOrigin(null)}>Limpiar</Button>
+        <div className="flex justify-end">
+          <Button variant="pillYellow" onClick={() => setOrigin(null)}>Limpiar</Button>
+        </div>
       </div>
       {origin && (
         <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">Origen: {origin.address}</p>
