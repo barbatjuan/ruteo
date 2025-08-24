@@ -21,18 +21,61 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [tenantSlug, setTenantSlug] = useState<string | null>(null);
   const [tenantUuid, setTenantUuid] = useState<string | null>(null);
   const [tenantLoading, setTenantLoading] = useState<boolean>(false);
-
-  // Parse slug from URL
+  // Parse first path segment from URL (can be UUID or legacy slug)
   useEffect(() => {
-    const [, slug] = window.location.pathname.split('/');
-    setTenantSlug(slug || null);
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const recompute = () => {
+      const [, seg] = window.location.pathname.split('/');
+      const val = seg || null;
+      setTenantSlug(val);
+      if (val && uuidRegex.test(val)) {
+        setTenantUuid(val);
+        setTenantLoading(false);
+      } else if (!val) {
+        setTenantUuid(null);
+        setTenantLoading(false);
+      }
+    };
+    // Initial compute
+    recompute();
+    // Listen to navigation events (popstate + patched pushState/replaceState)
+    const onPop = () => recompute();
+    window.addEventListener('popstate', onPop);
+    // Patch history methods once
+    const origPush = history.pushState;
+    const origReplace = history.replaceState;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (history as any).pushState = function (this: History, ...args: any[]) {
+      (origPush as any).apply(this, args as any);
+      window.dispatchEvent(new Event('app:navigation'));
+    } as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (history as any).replaceState = function (this: History, ...args: any[]) {
+      (origReplace as any).apply(this, args as any);
+      window.dispatchEvent(new Event('app:navigation'));
+    } as any;
+    const onNav = () => recompute();
+    window.addEventListener('app:navigation', onNav);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      window.removeEventListener('app:navigation', onNav);
+      // Restore originals
+      history.pushState = origPush;
+      history.replaceState = origReplace;
+    };
   }, []);
 
-  // Resolve slug -> UUID via Supabase RPC (security definer) then use UUID in X-Tenant-Id
+  // Resolve legacy slug -> UUID via Supabase RPC (security definer).
   useEffect(() => {
     const resolve = async () => {
       if (!tenantSlug) {
         setTenantUuid(null);
+        setTenantLoading(false);
+        return;
+      }
+      // If tenantSlug already looks like a UUID, do not RPC
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(tenantSlug)) {
         setTenantLoading(false);
         return;
       }

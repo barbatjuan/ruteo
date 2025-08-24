@@ -14,6 +14,8 @@ import { registerSW } from './lib/pwa';
 import { ToastProvider } from './state/ToastContext';
 import ToastViewport from './components/ToastViewport';
 import { RouteProvider } from './state/RouteContext';
+import Team from './pages/Team';
+import Signup from './pages/Signup';
 
 const router = createBrowserRouter([
   { path: '/', element: <Landing /> },
@@ -24,6 +26,8 @@ const router = createBrowserRouter([
   { path: '/:tenant/clients', element: <Clients /> },
   { path: '/:tenant/routes', element: <RoutesPage /> },
   { path: '/:tenant/settings', element: <Settings /> },
+  { path: '/:tenant/team', element: <Team /> },
+  { path: '/signup', element: <Signup /> },
 ]);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

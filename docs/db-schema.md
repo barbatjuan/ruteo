@@ -109,11 +109,11 @@ Paradas dentro de una ruta, manteniendo el orden.
 ## Row-Level Security (RLS)
 Habilitar RLS por tabla y filtrar por `tenant_id`.
 
-- Cabecera usada en este proyecto: `X-Tenant-Id`.
-- Supabase/PostgREST expone cabeceras como GUC en minúsculas (`request.headers.x-tenant-id`).
-- El frontend ya envía este header cuando `VITE_TENANT_MODE=header` (ver `src/lib/api.ts`).
+- Cabecera canónica: `x-tenant-uuid`.
+- Supabase/PostgREST expone cabeceras como GUC en minúsculas (`request.headers.x-tenant-uuid`).
+- El frontend envía este header automáticamente (ver `src/lib/supabase.ts`).
 
-Ejemplo (lectura/escritura por tenant) resolviendo el tenant desde la cabecera `X-Tenant-Id`:
+Ejemplo (lectura/escritura por tenant) resolviendo el tenant desde la cabecera `x-tenant-uuid`:
 
 ```sql
 alter table tenants enable row level security;
@@ -125,7 +125,7 @@ alter table route_stops enable row level security;
 
 -- Helper: asegura que la sesión tiene tenant_id
 create or replace function current_tenant() returns text language sql stable as $$
-  select nullif(current_setting('request.headers.x-tenant-id', true), '')
+  select nullif(current_setting('request.headers.x-tenant-uuid', true), '')
 $$;
 
 -- tenants: sólo lectura del propio registro
@@ -203,23 +203,21 @@ Notas:
 
 ---
 
-## Variables de entorno (Render / Vercel)
+## Variables de entorno (Vercel + Supabase)
 
-Frontend (Render Static / Vercel):
-- VITE_API_URL
-- VITE_TENANT_MODE = header
+Frontend (Vercel):
+- VITE_SUPABASE_URL
+- VITE_SUPABASE_ANON_KEY
 - VITE_GOOGLE_MAPS_API_KEY
 - VITE_GOOGLE_MAPS_LANG = es
 - VITE_GOOGLE_MAPS_REGION = UY
+- VITE_ENABLE_SW = true|false (opcional)
+- VITE_TENANT_MODE = header (opcional)
+
+Supabase (Edge Functions / proyecto):
 - SUPABASE_URL
 - SUPABASE_ANON_KEY
-
-Backend (Render Node):
-- PORT (Render lo inyecta)
-- CORS_ORIGINS
-- GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_LANG, GOOGLE_MAPS_REGION
-- SUPABASE_URL
-- SUPABASE_SERVICE_ROLE_KEY
+- SUPABASE_SERVICE_ROLE_KEY (necesario para Edge Function de invitaciones)
 
 ---
 

@@ -17,6 +17,7 @@ const SignupModal: React.FC<SignupModalProps> = ({ open, onClose }) => {
 
   // Company data
   const [companyName, setCompanyName] = useState('');
+  // identificador único: ahora autoasignado por la app (UUID text). No se pide al usuario.
   const [companySlug, setCompanySlug] = useState('');
   const [plan, setPlan] = useState<'Free' | 'Pro' | 'Business'>('Free');
 
@@ -26,13 +27,9 @@ const SignupModal: React.FC<SignupModalProps> = ({ open, onClose }) => {
   const [ownerPassword, setOwnerPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .trim();
+  const ensureSlug = () => {
+    // Genera un UUID textual para usar como slug público (URL-friendly y único)
+    if (!companySlug) setCompanySlug(crypto.randomUUID());
   };
 
   const handleCompanyNext = () => {
@@ -40,14 +37,8 @@ const SignupModal: React.FC<SignupModalProps> = ({ open, onClose }) => {
       error('El nombre de la empresa es obligatorio');
       return;
     }
-    if (!companySlug.trim()) {
-      error('El identificador de la empresa es obligatorio');
-      return;
-    }
-    if (companySlug.length < 3) {
-      error('El identificador debe tener al menos 3 caracteres');
-      return;
-    }
+    // El identificador se auto genera (UUID)
+    ensureSlug();
     setStep('owner');
   };
 
@@ -71,7 +62,7 @@ const SignupModal: React.FC<SignupModalProps> = ({ open, onClose }) => {
       // Create tenant and owner user
       const result = await createTenantAndOwner({
         companyName: companyName.trim(),
-        companySlug: companySlug.trim(),
+        companySlug: (companySlug || crypto.randomUUID()).trim(),
         plan,
         ownerName: ownerName.trim(),
         ownerEmail: ownerEmail.trim(),
@@ -87,8 +78,9 @@ const SignupModal: React.FC<SignupModalProps> = ({ open, onClose }) => {
           try {
             await login(ownerEmail.trim(), ownerPassword.trim());
             onClose();
-            // Redirect to company dashboard
-            window.location.href = `/${companySlug.trim()}`;
+            // Redirect: usamos el UUID del tenant (más robusto que slug)
+            const tenantUuid = result.tenant?.uuid_id || result.tenant?.uuid || null;
+            window.location.href = tenantUuid ? `/${tenantUuid}` : '/';
           } catch (e) {
             console.error('Auto-login failed:', e);
             error('Empresa creada, pero hubo un error al iniciar sesión. Intenta hacer login manualmente.');
@@ -168,27 +160,10 @@ const SignupModal: React.FC<SignupModalProps> = ({ open, onClose }) => {
                       value={companyName}
                       onChange={(e) => {
                         setCompanyName(e.target.value);
-                        setCompanySlug(generateSlug(e.target.value));
                       }}
                       className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 px-3 py-2"
                       placeholder="Mi Empresa SRL"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
-                      Identificador único
-                    </label>
-                    <input
-                      type="text"
-                      value={companySlug}
-                      onChange={(e) => setCompanySlug(e.target.value)}
-                      className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 px-3 py-2"
-                      placeholder="mi-empresa"
-                    />
-                    <p className="text-xs text-slate-500 mt-1">
-                      Tu URL será: ruteo.app/{companySlug}
-                    </p>
                   </div>
 
                   <div>

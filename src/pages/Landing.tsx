@@ -5,11 +5,9 @@ import TopNav from '../components/TopNav';
 import Pricing from '../components/Pricing';
 import FAQ from '../components/FAQ';
 import LoginModal from '../components/LoginModal';
-import SignupModal from '../components/SignupModal';
 
 const Landing: React.FC = () => {
   const [showLogin, setShowLogin] = useState(false);
-  const [showSignup, setShowSignup] = useState(false);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-emerald-50 dark:from-slate-950 dark:via-slate-900 dark:to-emerald-950">
@@ -71,17 +69,14 @@ const Landing: React.FC = () => {
               transition={{ duration: 0.8, delay: 0.3 }}
               className="flex flex-col sm:flex-row gap-4 justify-center mb-16"
             >
-              <button 
-                onClick={() => setShowSignup(true)}
-                className="group px-8 py-4 bg-gradient-to-r from-emerald-600 to-sky-600 text-white rounded-2xl font-semibold hover:from-emerald-700 hover:to-sky-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-              >
+              <Link to="/signup" className="group px-8 py-4 bg-gradient-to-r from-emerald-600 to-sky-600 text-white rounded-2xl font-semibold hover:from-emerald-700 hover:to-sky-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
                 <span className="flex items-center justify-center gap-2">
                   Crear empresa
                   <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
                 </span>
-              </button>
+              </Link>
               <button 
                 onClick={() => setShowLogin(true)}
                 className="px-8 py-4 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-2xl font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300"
@@ -247,15 +242,28 @@ const Landing: React.FC = () => {
                     ))}
                   </ul>
                   
-                  <button 
-                    onClick={() => plan.name === 'Business' ? null : setShowSignup(true)}
-                    className={`w-full py-4 rounded-xl font-semibold transition-all duration-300 ${
-                    plan.popular
-                      ? 'bg-gradient-to-r from-emerald-600 to-sky-600 text-white hover:from-emerald-700 hover:to-sky-700 shadow-lg'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}>
-                    {plan.name === 'Business' ? 'Contactar' : 'Comenzar'}
-                  </button>
+                  {plan.name === 'Business' ? (
+                    <button
+                      className={`w-full py-4 rounded-xl font-semibold transition-all duration-300 ${
+                        plan.popular
+                          ? 'bg-gradient-to-r from-emerald-600 to-sky-600 text-white hover:from-emerald-700 hover:to-sky-700 shadow-lg'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      Contactar
+                    </button>
+                  ) : (
+                    <Link
+                      to="/signup"
+                      className={`block text-center w-full py-4 rounded-xl font-semibold transition-all duration-300 ${
+                        plan.popular
+                          ? 'bg-gradient-to-r from-emerald-600 to-sky-600 text-white hover:from-emerald-700 hover:to-sky-700 shadow-lg'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      Comenzar
+                    </Link>
+                  )}
                 </motion.div>
               ))}
             </div>
@@ -288,7 +296,6 @@ const Landing: React.FC = () => {
       </main>
 
       <LoginModal open={showLogin} onClose={() => setShowLogin(false)} />
-      <SignupModal open={showSignup} onClose={() => setShowSignup(false)} />
     </div>
   );
 };
