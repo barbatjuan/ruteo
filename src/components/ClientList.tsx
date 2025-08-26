@@ -3,7 +3,7 @@ import Button from './ui/Button';
 import { useTenant } from '../state/TenantContext';
 import { useToast } from '../state/ToastContext';
 import { Client } from '../lib/clients';
-import { deleteClientSB, listClientsSB, updateClientSB } from '../lib/supabaseClients';
+import { deleteClientSB, listClientsSB, updateClientSB, listAddressesSB } from '../lib/supabaseClients';
 import ClientForm from './ClientForm';
 import EmptyState from './EmptyState';
 import ClientAddresses from './ClientAddresses';
@@ -21,7 +21,20 @@ const ClientList: React.FC = () => {
       if (!tenantUuid) { setClients([]); return; }
       try {
         setLoading(true);
-        const rows = await listClientsSB(tenantUuid);
+        let rows = await listClientsSB(tenantUuid);
+        // UI-side fallback: si todos vienen sin direcciones, las cargamos por cliente
+        if (rows.length && rows.every(c => (c.addresses?.length || 0) === 0)) {
+          try {
+            const merged = await Promise.all(rows.map(async (c) => {
+              const addrs = await listAddressesSB(c.id, tenantUuid);
+              return { ...c, addresses: addrs };
+            }));
+            rows = merged;
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.warn('[ClientList] per-client address fetch failed', e);
+          }
+        }
         setClients(rows);
       } catch (e) {
         console.error(e);

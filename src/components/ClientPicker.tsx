@@ -18,6 +18,7 @@ const ClientPicker: React.FC<Props> = ({ open, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
   const [q, setQ] = useState('');
+  // Sin creación inline: solo se listan direcciones existentes
 
   useEffect(() => {
     if (!open) return;
@@ -62,6 +63,8 @@ const ClientPicker: React.FC<Props> = ({ open, onClose }) => {
       error('No se pudo agregar a la ruta');
     }
   };
+
+  // No hay creación inline
 
   return (
     <Modal open={open} onClose={onClose} title="Agregar cliente a la ruta">

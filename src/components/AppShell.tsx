@@ -81,6 +81,7 @@ const AppShell: React.FC<Props> = ({ children }) => {
     { label: 'Dashboard', href: `/${tenant ?? 'acme'}/app`, icon: IconDashboard },
     { label: 'Clientes', href: `/${tenant ?? 'acme'}/clients`, icon: IconUsers },
     { label: 'Rutas', href: `/${tenant ?? 'acme'}/routes`, icon: IconRoute },
+    { label: 'Equipo', href: `/${tenant ?? 'acme'}/team`, icon: IconUsers },
     { label: 'Ajustes', href: `/${tenant ?? 'acme'}/settings`, icon: IconSettings },
   ];
 

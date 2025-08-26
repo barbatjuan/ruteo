@@ -2,7 +2,8 @@ import { getSupabase } from './supabase';
 import type { Client, ClientAddress } from './clients';
 
 function toClient(row: any): Client {
-  const addresses: ClientAddress[] = (row.client_addresses || []).map((a: any) => ({
+  const embedded = row.client_addresses ?? row.addresses ?? [];
+  const addresses: ClientAddress[] = (embedded || []).map((a: any) => ({
     id: a.id,
     label: a.label ?? undefined,
     address: a.address,
@@ -20,27 +21,65 @@ function toClient(row: any): Client {
 
 export async function listClientsSB(tenantUuid: string): Promise<Client[]> {
   const sb = getSupabase(tenantUuid);
-  // Usamos RPC para fijar tenant en la sesión del request (sin depender de headers)
-  const { data, error } = await sb.rpc('list_clients', { p_tenant: tenantUuid });
-  if (error) throw error;
-  const rows = (data as any[]) || [];
-  // Cargamos direcciones por cliente vía RPC también
-  const result: Client[] = [];
-  for (const row of rows) {
-    const addresses = await listAddressesSB(row.id, tenantUuid);
-    result.push({ id: row.id, name: row.name, phone: row.phone ?? undefined, notes: row.notes ?? undefined, addresses });
+  
+  // Método 1: Cargar clientes primero y luego sus direcciones por separado
+  // Esto evita problemas de RLS con las direcciones embebidas
+  try {
+    // Primero cargamos los clientes básicos
+    const { data: clientsData, error: clientsError } = await sb
+      .from('clients')
+      .select('id, name, phone, notes')
+      .eq('tenant_uuid', tenantUuid)
+      .order('created_at', { ascending: true });
+    
+    if (clientsError) throw clientsError;
+    
+    // Luego cargamos las direcciones para cada cliente
+    console.log('[listClientsSB] Cargando direcciones para', clientsData?.length || 0, 'clientes');
+    const clientsWithAddresses: Client[] = [];
+    
+    for (const client of (clientsData || [])) {
+      try {
+        const addresses = await listAddressesSB(client.id, tenantUuid);
+        clientsWithAddresses.push({
+          id: client.id,
+          name: client.name,
+          phone: client.phone ?? undefined,
+          notes: client.notes ?? undefined,
+          addresses: addresses
+        });
+      } catch (addrErr) {
+        console.warn('[listClientsSB] Error al cargar direcciones para cliente', client.id, addrErr);
+        // Agregamos el cliente sin direcciones
+        clientsWithAddresses.push({
+          id: client.id,
+          name: client.name,
+          phone: client.phone ?? undefined,
+          notes: client.notes ?? undefined,
+          addresses: []
+        });
+      }
+    }
+    
+    return clientsWithAddresses;
+  } catch (e) {
+    console.error('[listClientsSB] Error al cargar clientes:', e);
+    throw e;
   }
-  return result;
 }
 
 export async function createClientSB(input: { name: string; phone?: string; notes?: string }, tenantUuid: string): Promise<Client> {
   const sb = getSupabase(tenantUuid);
-  const { data, error } = await sb.rpc('create_client', {
-    p_tenant: tenantUuid,
-    p_name: input.name,
-    p_phone: input.phone ?? null,
-    p_notes: input.notes ?? null,
-  });
+  const { data, error } = await sb
+    .from('clients')
+    .insert({
+      tenant_uuid: tenantUuid,
+      name: input.name,
+      phone: input.phone ?? null,
+      notes: input.notes ?? null,
+    })
+    .select('id, name, phone, notes')
+    .single();
   if (error) throw error;
   const row = data as any;
   return { id: row.id, name: row.name, phone: row.phone ?? undefined, notes: row.notes ?? undefined, addresses: [] };
@@ -64,33 +103,105 @@ export async function deleteClientSB(id: string, tenantUuid: string): Promise<vo
 
 export async function listAddressesSB(clientId: string, tenantUuid: string): Promise<ClientAddress[]> {
   const sb = getSupabase(tenantUuid);
-  const { data, error } = await sb.rpc('list_client_addresses', { p_tenant: tenantUuid, p_client_id: clientId });
-  if (error) throw error;
-  return ((data as any[]) || []).map((a: any) => ({ id: a.id, label: a.label ?? undefined, address: a.address, lat: a.lat ?? undefined, lng: a.lng ?? undefined }));
+  
+  // Intento 1: Consulta directa a la tabla sin filtros RLS adicionales
+  try {
+    // Usamos el método más simple primero
+    const { data, error } = await sb
+      .from('client_addresses')
+      .select('id, label, address, lat, lng')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: true });
+    
+    if (!error && Array.isArray(data) && data.length > 0) {
+      console.log('[listAddressesSB] DIRECT client_id=', clientId, 'tenant=', tenantUuid, 'rows=', data.length);
+      return data.map((a: any) => ({
+        id: a.id,
+        label: a.label ?? undefined,
+        address: a.address,
+        lat: a.lat ?? undefined,
+        lng: a.lng ?? undefined
+      }));
+    }
+  } catch (directErr) {
+    console.warn('[listAddressesSB] Direct query failed:', directErr);
+  }
+  
+  // Intento 2: Usar una consulta SQL directa para evitar problemas de RLS
+  try {
+    // Consulta directa sin JOIN para ver si hay algo
+    const { data: checkData, error: checkError } = await sb.rpc('list_client_addresses', {
+      p_client_id: clientId,
+      p_tenant: tenantUuid  // Corregido: p_tenant en lugar de p_tenant_uuid
+    });
+    
+    if (!checkError && Array.isArray(checkData) && checkData.length > 0) {
+      console.log('[listAddressesSB] RPC client_id=', clientId, 'rows=', checkData.length);
+      return checkData.map((a: any) => ({
+        id: a.id,
+        label: a.label ?? undefined,
+        address: a.address,
+        lat: a.lat ?? undefined,
+        lng: a.lng ?? undefined
+      }));
+    }
+  } catch (rpcErr) {
+    // RPC puede no existir aún, es normal que falle
+    console.warn('[listAddressesSB] RPC failed (puede ser normal):', rpcErr);
+  }
+  
+  // Intento 3: JOIN explícito con clients para garantizar tenant_uuid correcto
+  try {
+    const { data, error } = await sb.from('client_addresses')
+      .select('id, label, address, lat, lng, clients!inner(tenant_uuid)')
+      .eq('client_id', clientId)
+      .eq('clients.tenant_uuid', tenantUuid)
+      .order('created_at', { ascending: true });
+
+    if (!error && Array.isArray(data)) {
+      console.log('[listAddressesSB] JOIN client_id=', clientId, 'tenant=', tenantUuid, 'rows=', data.length);
+      return data.map((a: any) => ({
+        id: a.id,
+        label: a.label ?? undefined,
+        address: a.address,
+        lat: a.lat ?? undefined,
+        lng: a.lng ?? undefined
+      }));
+    }
+  } catch (joinErr) {
+    console.warn('[listAddressesSB] JOIN failed:', joinErr);
+  }
+
+  // Si llegamos aquí, no pudimos obtener direcciones
+  console.log('[listAddressesSB] No se encontraron direcciones para client_id=', clientId);
+  return [];
 }
 
 export async function upsertAddressSB(clientId: string, addr: { id?: string; label?: string; address: string; lat?: number; lng?: number }, tenantUuid: string): Promise<void> {
   const sb = getSupabase(tenantUuid);
   if (!addr.id) {
-    const { error } = await sb.rpc('insert_client_address', {
-      p_tenant: tenantUuid,
-      p_client_id: clientId,
-      p_label: addr.label ?? null,
-      p_address: addr.address,
-      p_lat: addr.lat ?? null,
-      p_lng: addr.lng ?? null,
-    });
+    const { error } = await sb
+      .from('client_addresses')
+      .insert({
+        tenant_uuid: tenantUuid,
+        client_id: clientId,
+        label: addr.label ?? null,
+        address: addr.address,
+        lat: addr.lat ?? null,
+        lng: addr.lng ?? null,
+      });
     if (error) throw error;
   } else {
-    const { error } = await sb.rpc('update_client_address', {
-      p_tenant: tenantUuid,
-      p_id: addr.id,
-      p_client_id: clientId,
-      p_label: addr.label ?? null,
-      p_address: addr.address,
-      p_lat: addr.lat ?? null,
-      p_lng: addr.lng ?? null,
-    });
+    const { error } = await sb
+      .from('client_addresses')
+      .update({
+        label: addr.label ?? null,
+        address: addr.address,
+        lat: addr.lat ?? null,
+        lng: addr.lng ?? null,
+      })
+      .eq('id', addr.id)
+      .eq('client_id', clientId);
     if (error) throw error;
   }
 }
@@ -211,36 +322,22 @@ export async function listTeamMembers(tenantUuid: string): Promise<{
   status: TeamStatus;
 }[]> {
   const sb = getSupabase(tenantUuid);
-  // Try secure RPC first (recommended). If not present, fallback to direct select.
-  try {
-    const { data, error } = await sb.rpc('list_team_members', { p_tenant: tenantUuid });
-    if (error) throw error;
-    const rows = (data as any[]) || [];
-    return rows.map((r) => ({
-      user_id: r.user_id,
-      email: r.email ?? '',
-      name: r.name ?? undefined,
-      role: (r.role as TeamRole) ?? 'Driver',
-      created_at: r.created_at,
-      status: (r.status as TeamStatus) ?? 'active',
-    }));
-  } catch (_e) {
-    const { data, error } = await sb
-      .from('tenant_memberships')
-      .select('user_id, role, created_at')
-      .eq('tenant_uuid', tenantUuid)
-      .order('created_at', { ascending: true });
-    if (error) throw error;
-    const rows = (data as any[]) || [];
-    return rows.map((r) => ({
-      user_id: r.user_id,
-      email: '',
-      name: undefined,
-      role: r.role as TeamRole,
-      created_at: r.created_at,
-      status: 'active' as TeamStatus,
-    }));
-  }
+  // Direct select from tenant_memberships to avoid RPC dependency
+  const { data, error } = await sb
+    .from('tenant_memberships')
+    .select('user_id, role, created_at')
+    .eq('tenant_uuid', tenantUuid)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  const rows = (data as any[]) || [];
+  return rows.map((r) => ({
+    user_id: r.user_id,
+    email: '',
+    name: undefined,
+    role: r.role as TeamRole,
+    created_at: r.created_at,
+    status: 'active' as TeamStatus,
+  }));
 }
 
 // Invite a new member. From the public client we cannot create Auth users without affecting current session.
