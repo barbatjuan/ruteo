@@ -6,6 +6,8 @@ import { useRoute } from '../state/RouteContext';
 import { geocodeAddresses, calculateOptimizedRoute, autocompletePlaces, geocodeByPlaceId } from '../lib/api';
 import Input from './ui/Input';
 import Button from './ui/Button';
+import { useTenant } from '../state/TenantContext';
+import { getTenantCompanyDetails } from '../lib/tenant';
 
 const AddressForm: React.FC = () => {
   const [input, setInput] = useState('');
@@ -26,6 +28,7 @@ const AddressForm: React.FC = () => {
   const originDebRef = useRef<number | undefined>(undefined);
   const originBoxRef = useRef<HTMLDivElement | null>(null);
   const originInputRef = useRef<HTMLInputElement | null>(null);
+  const { tenantUuid } = useTenant();
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -59,6 +62,29 @@ const AddressForm: React.FC = () => {
       setOpenOriginSug(res.length > 0);
     }, 250);
   }, [originInput]);
+
+  // Default origin to company's saved location if available and no origin set
+  useEffect(() => {
+    const run = async () => {
+      if (!tenantUuid) return;
+      if (origin) return; // already set by user
+      try {
+        const det = await getTenantCompanyDetails(tenantUuid);
+        if (det && det.company_lat != null && det.company_lng != null && (det.company_formatted_address || det.company_address)) {
+          setOrigin({
+            address: det.company_formatted_address || det.company_address || 'Base empresa',
+            lat: det.company_lat as number,
+            lng: det.company_lng as number,
+          });
+        }
+      } catch (e) {
+        // silent
+      }
+    };
+    run();
+    // only on mount/tenant change; do not depend on origin to avoid loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantUuid]);
 
   const add = async () => {
     if (!input || input.trim().length < 3) {

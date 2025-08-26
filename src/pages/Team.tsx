@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import AppShell from '../components/AppShell';
 import { useTenant } from '../state/TenantContext';
 import { useToast } from '../state/ToastContext';
-import { listTeamMembers, inviteTeamMember, updateMemberRole, removeMemberFromTeam } from '../lib/supabaseClients';
+import { listTeamMembers, inviteTeamMember, updateMemberRole, removeMemberFromTeam, upsertTeamMemberName } from '../lib/supabaseClients';
 import { Role } from '../state/AuthContext';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -22,6 +23,9 @@ const Team: React.FC = () => {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [showInviteForm, setShowInviteForm] = useState(false);
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState<string>('');
+  const [savingName, setSavingName] = useState<Record<string, boolean>>({});
   
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState('');
@@ -40,6 +44,33 @@ const Team: React.FC = () => {
       error('Error al cargar el equipo');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const startEditName = (m: TeamMember) => {
+    setEditingName(m.user_id);
+    setNameDraft(m.name || '');
+  };
+
+  const cancelEditName = () => {
+    setEditingName(null);
+    setNameDraft('');
+  };
+
+  const saveName = async (userId: string) => {
+    if (!tenantUuid) return;
+    try {
+      setSavingName((s) => ({ ...s, [userId]: true }));
+      await upsertTeamMemberName(tenantUuid, userId, nameDraft);
+      success('Nombre actualizado');
+      setEditingName(null);
+      setNameDraft('');
+      loadMembers();
+    } catch (e: any) {
+      console.error('Error updating name:', e);
+      error('Error al actualizar nombre');
+    } finally {
+      setSavingName((s) => ({ ...s, [userId]: false }));
     }
   };
 
@@ -146,8 +177,8 @@ const Team: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
-      <div className="max-w-6xl mx-auto px-4 py-8">
+    <AppShell>
+      <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
@@ -296,19 +327,77 @@ const Team: React.FC = () => {
                   {members.map((member) => (
                     <tr key={member.user_id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
                       <td className="px-6 py-4">
-                        <div>
-                          <div className="font-medium text-slate-900 dark:text-white">
-                            {member.name || 'Sin nombre'}
+                        <div className="flex items-center gap-3">
+                          {/* Avatar con iniciales */}
+                          <div className="w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 flex items-center justify-center text-sm font-semibold">
+                            {(member.name || member.email || 'S')[0]?.toUpperCase()}
                           </div>
-                          <div className="text-sm text-slate-500 dark:text-slate-400">
-                            {member.email}
-                          </div>
+                          {editingName === member.user_id ? (
+                            <>
+                              <input
+                                className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 px-3 py-1.5 text-sm w-64"
+                                value={nameDraft}
+                                onChange={(e) => setNameDraft(e.target.value)}
+                                placeholder="Nombre visible"
+                              />
+                              <button
+                                onClick={() => saveName(member.user_id)}
+                                disabled={savingName[member.user_id]}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 ml-2"
+                                title="Guardar"
+                              >
+                                {savingName[member.user_id] ? (
+                                  <span className="animate-pulse">…</span>
+                                ) : (
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
+                                )}
+                              </button>
+                              <button
+                                onClick={cancelEditName}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 ml-1"
+                                title="Cancelar"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <div>
+                                <div className="font-medium text-slate-900 dark:text-white">
+                                  {member.name || 'Sin nombre'}
+                                </div>
+                                <div className="text-sm text-slate-500 dark:text-slate-400">
+                                  {member.email}
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => startEditName(member)}
+                                className="ml-2 inline-flex items-center px-2 py-1 rounded-md text-xs border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+                              >
+                                <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                Editar
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(member.role)}`}>
-                          {member.role}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(member.role)}`}>
+                            {member.role}
+                          </span>
+                          {member.role !== 'Owner' && (
+                            <select
+                              value={member.role}
+                              onChange={(e) => handleRoleChange(member.user_id, e.target.value as Role)}
+                              className="text-xs rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 px-2 py-1"
+                            >
+                              <option value="Driver">Driver</option>
+                              <option value="Dispatcher">Dispatcher</option>
+                              <option value="Admin">Admin</option>
+                            </select>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(member.status)}`}>
@@ -352,7 +441,7 @@ const Team: React.FC = () => {
           )}
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 };
 

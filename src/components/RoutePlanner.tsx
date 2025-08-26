@@ -11,6 +11,7 @@ import { useRoute } from '../state/RouteContext';
 import { useTenant } from '../state/TenantContext';
 import { useToast } from '../state/ToastContext';
 import { createRouteWithStops, listRoutesSB, verifyRouteExists } from '../lib/routes';
+import { getSupabase } from '../lib/supabase';
 import { listTeamMembers } from '../lib/supabaseClients';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -42,7 +43,7 @@ const RoutePlanner: React.FC = () => {
   }, [tenantUuid]);
 
   const stopPayload = useMemo(() => stops.map((s, idx) => ({
-    sequence: idx,
+    sequence: idx + 1,
     address: s.address,
     lat: s.lat,
     lng: s.lng,
@@ -75,6 +76,25 @@ const RoutePlanner: React.FC = () => {
         
         if (routeCreated) {
           console.log('[RoutePlanner] Ruta verificada en DB:', routeCreated);
+          // Verificar paradas insertadas para esta ruta
+          try {
+            const sb = getSupabase(tenantUuid);
+            // Usar RPC con SECURITY DEFINER para contar paradas sin depender de RLS del cliente
+            const { data: stopsCount, error: stopsCountError } = await sb.rpc('count_stops_for_route', {
+              p_tenant: tenantUuid,
+              p_route: result.route_id,
+            });
+            if (stopsCountError) {
+              console.warn('[RoutePlanner] Error contando paradas (RPC):', stopsCountError.message);
+            } else {
+              console.log(`[RoutePlanner] Paradas insertadas para ruta ${result.route_id}:`, stopsCount);
+              if (!stopsCount || stopsCount === 0) {
+                showError('La ruta se creó pero no se insertaron paradas. Revisemos el formato de datos.');
+              }
+            }
+          } catch (stopsCountEx) {
+            console.warn('[RoutePlanner] Excepción al contar paradas:', stopsCountEx);
+          }
         } else {
           console.warn('[RoutePlanner] La ruta no se encontró en la DB después de crearla');
           

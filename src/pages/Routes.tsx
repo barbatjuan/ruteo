@@ -33,10 +33,13 @@ const RoutesPage: React.FC = () => {
   const [routes, setRoutes] = useState<RouteRow[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [assigning, setAssigning] = useState<Record<string, boolean>>({});
+  const [editingAssign, setEditingAssign] = useState<Record<string, boolean>>({});
+  const [assignDraft, setAssignDraft] = useState<Record<string, string>>({});
   const [tab, setTab] = useState<'plan' | 'manage'>(() => (search.get('tab') === 'plan' ? 'plan' : 'manage'));
 
+  const shortId = (id: string) => id ? id.slice(0, 8) : '';
   const driverOptions = useMemo(() => (
-    [{ user_id: '', email: '— Sin asignar —' }, ...drivers]
+    [{ user_id: '', email: '— Sin asignar —', name: '— Sin asignar —' }, ...drivers]
   ), [drivers]);
 
   // Agregamos un estado para controlar la recarga de rutas
@@ -53,7 +56,11 @@ const RoutesPage: React.FC = () => {
         ]);
         console.log('[Routes] Rutas cargadas:', rts.length);
         setRoutes(rts);
-        setDrivers(team.map(t => ({ user_id: t.user_id, email: t.email || t.name || t.user_id, name: t.name })));
+        setDrivers(team.map(t => ({
+          user_id: t.user_id,
+          email: t.email || t.name || t.user_id,
+          name: t.name || undefined,
+        })));
       } catch (error) {
         console.error('[Routes] Error al cargar rutas:', error);
       } finally {
@@ -97,9 +104,23 @@ const RoutesPage: React.FC = () => {
     try {
       await assignRouteToDriver(tenantUuid, routeId, userId || null);
       setRoutes((rs) => rs.map(r => r.id === routeId ? { ...r, assigned_to: userId || null } : r));
+      // salir de modo edición para esa fila
+      setEditingAssign((s) => ({ ...s, [routeId]: false }));
+      setAssignDraft((s) => ({ ...s, [routeId]: userId }));
     } finally {
       setAssigning((s) => ({ ...s, [routeId]: false }));
     }
+  };
+
+  const beginEditAssign = (routeId: string) => {
+    const current = routes.find(r => r.id === routeId)?.assigned_to ?? '';
+    setAssignDraft((s) => ({ ...s, [routeId]: current }));
+    setEditingAssign((s) => ({ ...s, [routeId]: true }));
+  };
+
+  const cancelEditAssign = (routeId: string) => {
+    setEditingAssign((s) => ({ ...s, [routeId]: false }));
+    setAssignDraft((s) => ({ ...s, [routeId]: routes.find(r => r.id === routeId)?.assigned_to ?? '' }));
   };
 
   return (
@@ -188,7 +209,7 @@ const RoutesPage: React.FC = () => {
                         )}
                         {r.pending_stops !== undefined && r.completed_stops !== undefined && r.total_stops > 0 && (
                           <span className="text-xs text-slate-500 dark:text-slate-400">
-                            {r.completed_stops} completadas, {r.pending_stops} pendientes
+                            {r.completed_stops} completadas, {r.pending_stops} pendientes{r.eta_return_minutes != null ? ` · ETA regreso: ${r.eta_return_minutes} min` : ''}
                           </span>
                         )}
                       </div>
@@ -197,16 +218,54 @@ const RoutesPage: React.FC = () => {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <select
-                      value={r.assigned_to ?? ''}
-                      onChange={(e) => onAssign(r.id, e.target.value)}
-                      disabled={assigning[r.id] || loading}
-                      className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-                    >
-                      {driverOptions.map((d) => (
-                        <option key={d.user_id || 'none'} value={d.user_id}>{d.name || d.email}</option>
-                      ))}
-                    </select>
+                    {!editingAssign[r.id] ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-700 dark:text-slate-300">
+                          {drivers.find(d => d.user_id === r.assigned_to)?.name || drivers.find(d => d.user_id === r.assigned_to)?.email || '— Sin asignar —'}
+                        </span>
+                        <button
+                          className="px-2 py-1 rounded-md border text-xs border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                          onClick={() => beginEditAssign(r.id)}
+                        >
+                          Editar
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={assignDraft[r.id] ?? (r.assigned_to ?? '')}
+                          onChange={(e) => setAssignDraft((s) => ({ ...s, [r.id]: e.target.value }))}
+                          disabled={assigning[r.id] || loading}
+                          className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                        >
+                          {r.assigned_to && !drivers.some(d => d.user_id === r.assigned_to) && (
+                            <option value={r.assigned_to}>{shortId(r.assigned_to)}</option>
+                          )}
+                          {driverOptions.map((d) => (
+                            <option key={d.user_id || 'none'} value={d.user_id}>
+                              {d.user_id ? (d.name || (d.email ? d.email.split('@')[0] : shortId(d.user_id))) : (d.name || d.email)}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
+                          onClick={() => onAssign(r.id, assignDraft[r.id] ?? '')}
+                          disabled={assigning[r.id]}
+                          title="Guardar"
+                        >
+                          {assigning[r.id] ? <span className="animate-pulse">…</span> : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
+                          )}
+                        </button>
+                        <button
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                          onClick={() => cancelEditAssign(r.id)}
+                          title="Cancelar"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

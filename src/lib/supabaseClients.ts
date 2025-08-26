@@ -322,7 +322,25 @@ export async function listTeamMembers(tenantUuid: string): Promise<{
   status: TeamStatus;
 }[]> {
   const sb = getSupabase(tenantUuid);
-  // Direct select from tenant_memberships to avoid RPC dependency
+  // Intento 1: usar RPC con SECURITY DEFINER que incluye display_name
+  try {
+    const { data, error } = await sb.rpc('list_team_members_with_profiles', { p_tenant: tenantUuid });
+    if (error) throw error;
+    if (Array.isArray(data)) {
+      return (data as any[]).map((r) => ({
+        user_id: r.user_id,
+        email: '',
+        name: r.display_name ?? undefined,
+        role: r.role as TeamRole,
+        created_at: r.created_at,
+        status: 'active' as TeamStatus,
+      }));
+    }
+  } catch (rpcErr) {
+    console.warn('[listTeamMembers] RPC list_team_members_with_profiles falló, usando fallback:', rpcErr);
+  }
+
+  // Fallback: consulta directa sin nombre mostrado
   const { data, error } = await sb
     .from('tenant_memberships')
     .select('user_id, role, created_at')
@@ -363,6 +381,21 @@ export async function inviteTeamMember(params: {
 
 export async function updateMemberRole(tenantUuid: string, userId: string, newRole: TeamRole): Promise<void> {
   const sb = getSupabase(tenantUuid);
+  // 1) Intentar RPC SECURITY DEFINER si está instalada
+  try {
+    const { error } = await sb.rpc('update_team_member_role', {
+      p_tenant: tenantUuid,
+      p_user: userId,
+      p_role: newRole,
+    });
+    if (!error) return;
+    if ((error as any)?.code !== 'PGRST202') throw error;
+  } catch (e) {
+    const code = (e as any)?.code;
+    if (code && code !== 'PGRST202') throw e;
+  }
+
+  // 2) Fallback: update directo (puede fallar por RLS si el rol no tiene permisos)
   const { error } = await sb
     .from('tenant_memberships')
     .update({ role: newRole })
@@ -378,5 +411,16 @@ export async function removeMemberFromTeam(tenantUuid: string, userId: string): 
     .delete()
     .eq('tenant_uuid', tenantUuid)
     .eq('user_id', userId);
+  if (error) throw error;
+}
+
+// Upsert display name for a team member (SECURITY DEFINER RPC)
+export async function upsertTeamMemberName(tenantUuid: string, userId: string, name: string): Promise<void> {
+  const sb = getSupabase(tenantUuid);
+  const { error } = await sb.rpc('upsert_team_member_name', {
+    p_tenant: tenantUuid,
+    p_user: userId,
+    p_name: name,
+  });
   if (error) throw error;
 }
