@@ -1,5 +1,5 @@
 import React from 'react';
-import TopNav from '../components/TopNav';
+import AppShell from '../components/AppShell';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
@@ -107,9 +107,8 @@ const Settings: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950">
-      <TopNav showOrgSwitcher />
-      <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+    <AppShell>
+      <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Configuración</h1>
 
         <Card>
@@ -162,8 +161,8 @@ const Settings: React.FC = () => {
         <div>
           <p className="text-sm text-slate-500 dark:text-slate-400">Próximamente: Notificaciones, Facturación, Equipos/Proyectos, i18n.</p>
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 };
 

@@ -2,9 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import AppShell from '../components/AppShell';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useTenant } from '../state/TenantContext';
-import { listRoutesSB, assignRouteToDriver, type RouteRow } from '../lib/routes';
+import { listRoutesSB, assignRouteToDriver, type RouteRow, deleteRouteSB, fetchRouteStopsSB, updateRouteStopsSB, type RouteStopRow } from '../lib/routes';
 import { listTeamMembers } from '../lib/supabaseClients';
 import RoutePlanner from '../components/RoutePlanner';
+import { useToast } from '../state/ToastContext';
+import Modal from '../components/ui/Modal';
+import Button from '../components/ui/Button';
 
 type Driver = { user_id: string; email: string; name?: string };
 
@@ -25,6 +28,27 @@ const getStatusStyle = (status: string) => {
   }
 };
 
+// Etiqueta amigable en ES (capitalizada) para el estado
+const getStatusLabel = (status?: string | null) => {
+  switch ((status || '').toLowerCase()) {
+    case 'planned':
+      return 'Planificada';
+    case 'pending':
+      return 'Pendiente';
+    case 'in_progress':
+      return 'En recorrido';
+    case 'completed':
+    case 'done':
+      return 'Completada';
+    case 'cancelled':
+      return 'Cancelada';
+    case 'draft':
+      return 'Borrador';
+    default:
+      return status || '';
+  }
+};
+
 const RoutesPage: React.FC = () => {
   const { tenantUuid } = useTenant();
   const { tenant } = useParams();
@@ -36,6 +60,17 @@ const RoutesPage: React.FC = () => {
   const [editingAssign, setEditingAssign] = useState<Record<string, boolean>>({});
   const [assignDraft, setAssignDraft] = useState<Record<string, string>>({});
   const [tab, setTab] = useState<'plan' | 'manage'>(() => (search.get('tab') === 'plan' ? 'plan' : 'manage'));
+  const [deleting, setDeleting] = useState<Record<string, boolean>>({});
+  const { info, success } = useToast();
+
+  // Editor de paradas
+  type EditStop = { id?: string; address: string | null; lat: number; lng: number; sequence: number };
+  const [editOpen, setEditOpen] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editRouteId, setEditRouteId] = useState<string | null>(null);
+  const [editRouteName, setEditRouteName] = useState<string>('');
+  const [editStops, setEditStops] = useState<EditStop[]>([]);
 
   const shortId = (id: string) => id ? id.slice(0, 8) : '';
   const driverOptions = useMemo(() => (
@@ -123,6 +158,109 @@ const RoutesPage: React.FC = () => {
     setAssignDraft((s) => ({ ...s, [routeId]: routes.find(r => r.id === routeId)?.assigned_to ?? '' }));
   };
 
+  const canModify = (status: string | undefined | null) => {
+    const s = (status || '').toLowerCase();
+    return s === 'planned' || s === 'pending' || s === 'draft';
+  };
+
+  const onDelete = async (routeId: string) => {
+    if (!tenantUuid) {
+      // Usar toast para feedback visible
+      info('No se pudo identificar el tenant. Recarga la página e inténtalo nuevamente.');
+      console.warn('[Routes] onDelete sin tenantUuid');
+      return;
+    }
+    const route = routes.find(r => r.id === routeId);
+    if (!route) return;
+    if (!canModify(route.status)) {
+      alert('Solo se pueden eliminar rutas en estado borrador/planificada/pending.');
+      return;
+    }
+    const ok = window.confirm(`¿Eliminar la ruta "${route.name}"? Esta acción no se puede deshacer.`);
+    if (!ok) return;
+    setDeleting((s) => ({ ...s, [routeId]: true }));
+    try {
+      await deleteRouteSB(tenantUuid, routeId);
+      // refrescar lista
+      setRoutes((rs) => rs.filter(r => r.id !== routeId));
+      success('Ruta eliminada correctamente');
+    } catch (e) {
+      console.error('[Routes] Error al eliminar ruta', e);
+      info('No se pudo eliminar la ruta. Verifica permisos y estado.');
+    } finally {
+      setDeleting((s) => ({ ...s, [routeId]: false }));
+    }
+  };
+
+  const onEditStops = async (routeId: string) => {
+    console.log('[Routes] Editar paradas click', routeId);
+    const r = routes.find(rt => rt.id === routeId);
+    if (!r) return;
+    if (!canModify(r.status)) {
+      info('Solo se pueden editar paradas si la ruta está en Borrador/Planificada/Pendiente.');
+      return;
+    }
+    if (!tenantUuid) {
+      info('No se pudo identificar el tenant.');
+      return;
+    }
+    setEditOpen(true);
+    setEditLoading(true);
+    setEditRouteId(routeId);
+    setEditRouteName(r.name);
+    try {
+      const stops = await fetchRouteStopsSB(tenantUuid, routeId);
+      const mapped: EditStop[] = (stops || []).map((s: RouteStopRow) => ({
+        id: s.id,
+        address: s.address,
+        lat: s.lat,
+        lng: s.lng,
+        sequence: s.sequence,
+      }));
+      setEditStops(mapped);
+    } catch (e) {
+      console.error('[Routes] Error al cargar paradas', e);
+      info('No se pudieron cargar las paradas de la ruta.');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const addEditRow = () => setEditStops((s) => [...s, { address: '', lat: 0, lng: 0, sequence: (s[s.length - 1]?.sequence ?? 0) + 1 }]);
+  const removeEditRow = (idx: number) => setEditStops((s) => s.filter((_, i) => i !== idx));
+  const setEditField = (idx: number, field: keyof EditStop, value: any) =>
+    setEditStops((s) => s.map((row, i) => (i === idx ? { ...row, [field]: value } : row)));
+
+  const saveEditStops = async () => {
+    if (!tenantUuid || !editRouteId) return;
+    setEditSaving(true);
+    try {
+      // Normalizar y ordenar por sequence
+      const normalized = [...editStops]
+        .filter((s) => Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng)))
+        .map((s, i) => ({
+          id: s.id,
+          address: s.address ?? null,
+          lat: Number(s.lat),
+          lng: Number(s.lng),
+          sequence: Number(s.sequence) || i + 1,
+        }))
+        .sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
+        .map((s, i) => ({ ...s, sequence: i + 1 }));
+
+      await updateRouteStopsSB(tenantUuid, editRouteId, normalized);
+      success('Paradas actualizadas');
+      // Refrescar contador en la tabla (simplemente refetch rutas)
+      setRefreshRoutes((n) => n + 1);
+      setEditOpen(false);
+    } catch (e) {
+      console.error('[Routes] Error guardando paradas', e);
+      info('No se pudieron guardar las paradas.');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   return (
     <AppShell>
       <div className="max-w-7xl mx-auto px-4 py-6">
@@ -181,6 +319,7 @@ const RoutesPage: React.FC = () => {
                 <th className="text-left font-semibold px-4 py-3">Estado</th>
                 <th className="text-left font-semibold px-4 py-3">Paradas</th>
                 <th className="text-left font-semibold px-4 py-3">Conductor</th>
+                <th className="text-right font-semibold px-4 py-3">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -190,7 +329,7 @@ const RoutesPage: React.FC = () => {
                   <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{r.date ?? '—'}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium ${getStatusStyle(r.status)}`}>
-                      {r.status}
+                      {getStatusLabel(r.status)}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -267,16 +406,37 @@ const RoutesPage: React.FC = () => {
                       </div>
                     )}
                   </td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        className={`px-2 py-1 rounded-md border text-xs ${canModify(r.status) ? 'border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800' : 'border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'}`}
+                        disabled={!canModify(r.status)}
+                        onClick={() => onEditStops(r.id)}
+                      >
+                        Editar paradas
+                      </button>
+                      <button
+                        type="button"
+                        className={`px-2 py-1 rounded-md text-xs ${canModify(r.status) ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-red-200 text-white/70 cursor-not-allowed'}`}
+                        disabled={!canModify(r.status) || deleting[r.id]}
+                        onClick={() => onDelete(r.id)}
+                        title="Eliminar ruta"
+                      >
+                        {deleting[r.id] ? 'Eliminando…' : 'Eliminar'}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {routes.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-slate-500">No hay rutas aún</td>
+                  <td colSpan={6} className="px-4 py-10 text-center text-slate-500">No hay rutas todavía</td>
                 </tr>
               )}
               {loading && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-slate-500">Cargando…</td>
+                  <td colSpan={6} className="px-4 py-10 text-center text-slate-500">Cargando…</td>
                 </tr>
               )}
             </tbody>
@@ -284,6 +444,95 @@ const RoutesPage: React.FC = () => {
         </div>
         )}
       </div>
+
+      {/* Modal editor de paradas */}
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title={`Editar paradas · ${editRouteName}`}>
+        <div className="p-4 space-y-4">
+          {editLoading ? (
+            <div className="text-sm text-slate-500">Cargando paradas…</div>
+          ) : (
+            <>
+              <div className="overflow-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-slate-500">
+                      <th className="px-2 py-1 w-16">#</th>
+                      <th className="px-2 py-1">Dirección</th>
+                      <th className="px-2 py-1 w-28">Lat</th>
+                      <th className="px-2 py-1 w-28">Lng</th>
+                      <th className="px-2 py-1 w-12"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editStops.map((s, idx) => (
+                      <tr key={idx} className="border-t border-slate-200 dark:border-slate-800">
+                        <td className="px-2 py-1">
+                          <input
+                            type="number"
+                            value={s.sequence}
+                            onChange={(e) => setEditField(idx, 'sequence', Number(e.target.value))}
+                            className="w-16 px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                          />
+                        </td>
+                        <td className="px-2 py-1">
+                          <input
+                            value={s.address ?? ''}
+                            onChange={(e) => setEditField(idx, 'address', e.target.value)}
+                            placeholder="Dirección"
+                            className="w-full px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                          />
+                        </td>
+                        <td className="px-2 py-1">
+                          <input
+                            type="number"
+                            step="any"
+                            value={s.lat}
+                            onChange={(e) => setEditField(idx, 'lat', Number(e.target.value))}
+                            className="w-28 px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                          />
+                        </td>
+                        <td className="px-2 py-1">
+                          <input
+                            type="number"
+                            step="any"
+                            value={s.lng}
+                            onChange={(e) => setEditField(idx, 'lng', Number(e.target.value))}
+                            className="w-28 px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                          />
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          <button
+                            type="button"
+                            className="text-red-600 hover:underline text-xs"
+                            onClick={() => removeEditRow(idx)}
+                            title="Eliminar parada"
+                          >
+                            Eliminar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {editStops.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-2 py-8 text-center text-slate-500">Sin paradas</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-between">
+                <Button type="button" variant="pillGray" className="rounded-lg" onClick={addEditRow}>Agregar parada</Button>
+                <div className="flex gap-2">
+                  <Button type="button" variant="pillGray" className="rounded-lg" onClick={() => setEditOpen(false)}>Cancelar</Button>
+                  <Button type="button" variant="pillGreen" className="rounded-lg" disabled={editSaving} onClick={saveEditStops}>
+                    {editSaving ? 'Guardando…' : 'Guardar'}
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
     </AppShell>
   );
 };

@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Clients from './pages/Clients';
 import RoutesPage from './pages/Routes';
+import Driver from './pages/Driver';
 import Settings from './pages/Settings';
 import { TenantProvider } from './state/TenantContext';
 import { AuthProvider } from './state/AuthContext';
@@ -25,6 +26,7 @@ const router = createBrowserRouter([
   { path: '/:tenant/app', element: <Dashboard /> },
   { path: '/:tenant/clients', element: <Clients /> },
   { path: '/:tenant/routes', element: <RoutesPage /> },
+  { path: '/:tenant/driver', element: <Driver /> },
   { path: '/:tenant/settings', element: <Settings /> },
   { path: '/:tenant/team', element: <Team /> },
   { path: '/signup', element: <Signup /> },

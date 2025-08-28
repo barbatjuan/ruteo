@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createClientSB, upsertAddressSB } from '../lib/supabaseClients';
-import { autocompletePlaces, geocodeByPlaceId } from '../lib/api';
+import { autocompletePlaces, geocodeByPlaceId, geocodeAddresses } from '../lib/api';
 import { useTenant } from '../state/TenantContext';
 import { useToast } from '../state/ToastContext';
 
@@ -13,6 +13,8 @@ const ClientForm: React.FC<{ onCreated?: () => void }> = ({ onCreated }) => {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [addr, setAddr] = useState('');
+  const [addrLat, setAddrLat] = useState<number | undefined>(undefined);
+  const [addrLng, setAddrLng] = useState<number | undefined>(undefined);
   const [suggestions, setSuggestions] = useState<{ description: string; place_id: string }[]>([]);
   const [openSug, setOpenSug] = useState(false);
   const debRef = useRef<number | undefined>(undefined);
@@ -39,6 +41,11 @@ const ClientForm: React.FC<{ onCreated?: () => void }> = ({ onCreated }) => {
     }, 250);
   }, [addr]);
 
+  useEffect(() => {
+    setAddrLat(undefined);
+    setAddrLng(undefined);
+  }, [addr]);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -54,10 +61,19 @@ const ClientForm: React.FC<{ onCreated?: () => void }> = ({ onCreated }) => {
       const client = await createClientSB({ name: name.trim(), phone: phone.trim() || undefined, notes: notes.trim() || undefined }, tenantUuid);
       // Crear dirección inicial si se ingresó
       if (addr.trim()) {
-        await upsertAddressSB(client.id, { address: addr.trim() }, tenantUuid);
+        let curLat = addrLat; let curLng = addrLng;
+        if (curLat === undefined || curLng === undefined) {
+          try {
+            const res = await geocodeAddresses([{ address: addr.trim() }], tenantUuid);
+            if (res && res[0]) { curLat = res[0].lat; curLng = res[0].lng; }
+          } catch {
+            // keep undefined if geocode fails; we still store the address
+          }
+        }
+        await upsertAddressSB(client.id, { address: addr.trim(), lat: curLat, lng: curLng }, tenantUuid);
       }
       success('Cliente creado');
-      setName(''); setPhone(''); setNotes(''); setAddr('');
+      setName(''); setPhone(''); setNotes(''); setAddr(''); setAddrLat(undefined); setAddrLng(undefined);
       onCreated?.();
     } catch (err) {
       console.error(err);
@@ -97,6 +113,7 @@ const ClientForm: React.FC<{ onCreated?: () => void }> = ({ onCreated }) => {
                   try {
                     const det = await geocodeByPlaceId(s.place_id);
                     setAddr(det.normalized || s.description);
+                    setAddrLat(det.lat); setAddrLng(det.lng);
                     setSuggestions([]); setOpenSug(false);
                     try { inputRef.current?.blur(); } catch {}
                   } catch (e) {

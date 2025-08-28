@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../state/AuthContext';
+import { useTenant } from '../state/TenantContext';
+import { getSupabase } from '../lib/supabase';
 
 type Props = {
   children: React.ReactNode;
@@ -49,10 +51,12 @@ const IconLogout = (props: React.SVGProps<SVGSVGElement>) => (
 const AppShell: React.FC<Props> = ({ children }) => {
   const [dark, setDark] = useState(false);
   const { user, logout } = useAuth();
+  const { tenantUuid } = useTenant();
   const { tenant } = useParams();
   const nav = useNavigate();
   const loc = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDriver, setIsDriver] = useState(false);
 
   const isActive = (path: string) => loc.pathname.startsWith(path);
 
@@ -77,13 +81,59 @@ const AppShell: React.FC<Props> = ({ children }) => {
     document.documentElement.classList.toggle('dark');
   };
 
-  const navItems = [
-    { label: 'Dashboard', href: `/${tenant ?? 'acme'}/app`, icon: IconDashboard },
-    { label: 'Clientes', href: `/${tenant ?? 'acme'}/clients`, icon: IconUsers },
-    { label: 'Rutas', href: `/${tenant ?? 'acme'}/routes`, icon: IconRoute },
-    { label: 'Equipo', href: `/${tenant ?? 'acme'}/team`, icon: IconUsers },
-    { label: 'Ajustes', href: `/${tenant ?? 'acme'}/settings`, icon: IconSettings },
-  ];
+  // Compute role (Driver) from membership if not available on user object
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        if (!user?.id || !tenantUuid) { setIsDriver(false); return; }
+        const sb = getSupabase(tenantUuid);
+        const { data, error } = await sb
+          .from('tenant_memberships')
+          .select('role')
+          .eq('tenant_uuid', tenantUuid)
+          .eq('user_id', user.id)
+          .limit(1)
+          .maybeSingle();
+        if (error) throw error;
+        if (!cancelled) setIsDriver((data?.role as string | undefined) === 'Driver');
+      } catch {
+        if (!cancelled) setIsDriver(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user?.id, tenantUuid]);
+
+  // Route guard for Driver role: restrict to driver page (and login)
+  useEffect(() => {
+    const isDriverRole = Boolean(user?.roles?.includes('Driver') || isDriver);
+    if (!isDriverRole) return;
+    const base = `/${tenant ?? 'acme'}`;
+    const allowedPrefixes = [
+      `${base}/driver`,
+      `${base}/login`,
+    ];
+    if (!allowedPrefixes.some((p) => loc.pathname.startsWith(p))) {
+      nav(`${base}/driver`, { replace: true });
+    }
+  }, [user?.roles, isDriver, tenant, loc.pathname, nav]);
+
+  // Build menu depending on role
+  let navItems = [];
+  if (user?.roles?.includes('Driver') || isDriver) {
+    navItems = [
+      { label: 'Mis rutas', href: `/${tenant ?? 'acme'}/driver`, icon: IconRoute },
+    ];
+  } else {
+    navItems = [
+      { label: 'Dashboard', href: `/${tenant ?? 'acme'}/app`, icon: IconDashboard },
+      { label: 'Clientes', href: `/${tenant ?? 'acme'}/clients`, icon: IconUsers },
+      { label: 'Rutas', href: `/${tenant ?? 'acme'}/routes`, icon: IconRoute },
+      { label: 'Equipo', href: `/${tenant ?? 'acme'}/team`, icon: IconUsers },
+      { label: 'Ajustes', href: `/${tenant ?? 'acme'}/settings`, icon: IconSettings },
+    ];
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex overflow-x-hidden">

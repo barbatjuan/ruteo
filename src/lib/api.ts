@@ -1,5 +1,6 @@
 /* API helpers with mock implementation */
 import { getGoogle } from './google';
+import { getSupabase } from './supabase';
 const BASE = import.meta.env.VITE_API_URL || '';
 const GOOGLE_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 const GOOGLE_LANG = (import.meta.env.VITE_GOOGLE_MAPS_LANG as string | undefined) || 'es';
@@ -245,3 +246,77 @@ export async function listClients() { return []; }
 export async function createClient() { return { ok: true }; }
 export async function importClientsCSV() { return { ok: true }; }
 export async function listRoutes() { return []; }
+
+// ===== Driver RPC wrappers (Supabase) =====
+
+export type DriverRouteSummary = {
+  id: string;
+  date: string;
+  name: string;
+  status: 'planned' | 'pending' | 'in_progress' | 'completed' | string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  assigned_to: string | null;
+  total_stops: number;
+  completed_stops: number;
+};
+
+export async function listDriverRoutesSB(tenantUuid: string, dateIso: string) {
+  const sb = getSupabase(tenantUuid);
+  // Try v2 first (filtered counts excluding company location), fallback to v1
+  try {
+    const { data, error } = await sb.rpc('list_driver_routes_v2', { p_tenant: tenantUuid, p_date: dateIso });
+    if (error) throw error;
+    if (Array.isArray(data)) {
+      if (data.length && (data[0] as any).list_driver_routes_v2) return (data[0] as any).list_driver_routes_v2 as DriverRouteSummary[];
+      return data as DriverRouteSummary[];
+    }
+  } catch {
+    // ignore and fallback
+  }
+  // v1 fallback
+  const { data: dataV1, error: errV1 } = await sb.rpc('list_driver_routes', { p_tenant: tenantUuid, p_date: dateIso });
+  if (errV1) throw errV1;
+  if (Array.isArray(dataV1)) {
+    if (dataV1.length && (dataV1[0] as any).list_driver_routes) return (dataV1[0] as any).list_driver_routes as DriverRouteSummary[];
+    return dataV1 as DriverRouteSummary[];
+  }
+  return [] as DriverRouteSummary[];
+}
+
+export type DriverRouteDetail = {
+  route: any;
+  stops: Array<{ id: string; sequence: number; status: string; address?: string; eta?: string | null; arrived_at?: string | null; completed_at?: string | null }>;
+};
+
+export async function getDriverRouteWithStopsSB(tenantUuid: string, routeId: string) {
+  const sb = getSupabase(tenantUuid);
+  const { data, error } = await sb.rpc('driver_route_with_stops', { p_tenant: tenantUuid, p_route: routeId });
+  if (error) throw error;
+  return data as DriverRouteDetail;
+}
+
+export async function startRouteSB(tenantUuid: string, routeId: string) {
+  const sb = getSupabase(tenantUuid);
+  const { error } = await sb.rpc('start_route', { p_tenant: tenantUuid, p_route: routeId });
+  if (error) throw error;
+}
+
+export async function finishRouteSB(tenantUuid: string, routeId: string) {
+  const sb = getSupabase(tenantUuid);
+  const { error } = await sb.rpc('finish_route', { p_tenant: tenantUuid, p_route: routeId });
+  if (error) throw error;
+}
+
+export async function arriveStopSB(tenantUuid: string, stopId: string) {
+  const sb = getSupabase(tenantUuid);
+  const { error } = await sb.rpc('arrive_stop', { p_tenant: tenantUuid, p_stop: stopId });
+  if (error) throw error;
+}
+
+export async function completeStopSB(tenantUuid: string, stopId: string) {
+  const sb = getSupabase(tenantUuid);
+  const { error } = await sb.rpc('complete_stop', { p_tenant: tenantUuid, p_stop: stopId });
+  if (error) throw error;
+}

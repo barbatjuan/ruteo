@@ -28,15 +28,30 @@ AS $$
     COALESCE(rs.pending_stops, 0) AS pending_stops,
     COALESCE(rs.completed_stops, 0) AS completed_stops
   FROM routes r
-  LEFT JOIN (
+  LEFT JOIN LATERAL (
     SELECT
-      route_id,
-      COUNT(*) AS total_stops,
-      COUNT(*) FILTER (WHERE status = 'pending') AS pending_stops,
-      COUNT(*) FILTER (WHERE status = 'completed') AS completed_stops
-    FROM route_stops
-    GROUP BY route_id
-  ) rs ON rs.route_id = r.id
+      COUNT(*) FILTER (
+        WHERE NOT (
+          t.company_lat IS NOT NULL AND t.company_lng IS NOT NULL AND
+          abs(rs.lat - t.company_lat) < 0.0005 AND abs(rs.lng - t.company_lng) < 0.0005
+        )
+      ) AS total_stops,
+      COUNT(*) FILTER (
+        WHERE rs.status = 'pending' AND NOT (
+          t.company_lat IS NOT NULL AND t.company_lng IS NOT NULL AND
+          abs(rs.lat - t.company_lat) < 0.0005 AND abs(rs.lng - t.company_lng) < 0.0005
+        )
+      ) AS pending_stops,
+      COUNT(*) FILTER (
+        WHERE rs.status = 'completed' AND NOT (
+          t.company_lat IS NOT NULL AND t.company_lng IS NOT NULL AND
+          abs(rs.lat - t.company_lat) < 0.0005 AND abs(rs.lng - t.company_lng) < 0.0005
+        )
+      ) AS completed_stops
+    FROM route_stops rs
+    JOIN tenants t ON t.uuid_id = r.tenant_uuid
+    WHERE rs.route_id = r.id
+  ) rs ON TRUE
   WHERE r.tenant_uuid = p_tenant
   ORDER BY r.created_at DESC;
 $$;

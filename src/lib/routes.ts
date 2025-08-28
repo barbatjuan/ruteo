@@ -32,7 +32,7 @@ export async function listRoutesSB(tenantUuid: string): Promise<RouteRow[]> {
       console.error('[listRoutesSB] Error al obtener rutas con RPC:', error);
       throw error;
     }
-    
+
     console.log('[listRoutesSB] Respuesta RPC:', data);
     
     // La respuesta debe ser un array de rutas con stats
@@ -87,6 +87,108 @@ export async function listRoutesSB(tenantUuid: string): Promise<RouteRow[]> {
   
   // 2. Ya tenemos stats si vino por RPC. Si vino por fallback directo, no hay stats.
   return routes;
+}
+
+// ==============================
+// Read route stops
+// ==============================
+
+export type RouteStopRow = {
+  id: string;
+  route_id: string;
+  tenant_uuid: string;
+  sequence: number;
+  address: string | null;
+  lat: number;
+  lng: number;
+  status: string;
+};
+
+export async function fetchRouteStopsSB(
+  tenantUuid: string,
+  routeId: string,
+): Promise<RouteStopRow[]> {
+  const sb = getSupabase(tenantUuid);
+  const { data, error } = await sb
+    .from('route_stops')
+    .select('id, route_id, tenant_uuid, sequence, address, lat, lng, status')
+    .eq('route_id', routeId)
+    .order('sequence', { ascending: true });
+  if (error) throw error;
+  return (data as RouteStopRow[]) || [];
+}
+
+// ==============================
+// Delete / Edit route (stops)
+// ==============================
+
+export interface EditableStopInput {
+  id?: string;
+  client_id?: string | null;
+  address?: string | null;
+  lat: number;
+  lng: number;
+  notes?: string | null;
+  sequence: number;
+}
+
+export async function deleteRouteSB(tenantUuid: string, routeId: string): Promise<void> {
+  const sb = getSupabase(tenantUuid);
+  // Try RPC SECURITY DEFINER first
+  try {
+    const { error } = await sb.rpc('delete_route_secure', { p_tenant: tenantUuid, p_route: routeId });
+    if (!error) return;
+    if ((error as any)?.code !== 'PGRST202') throw error; // function not found ignored
+  } catch (e: any) {
+    if (e?.code && e.code !== 'PGRST202') throw e;
+  }
+  // Fallback: direct delete (may fail by RLS)
+  const { error: e1 } = await sb.from('route_stops').delete().eq('tenant_uuid', tenantUuid).eq('route_id', routeId);
+  if (e1 && (e1 as any).code !== 'PGRST116') {
+    // ignore "no rows"; throw other errors
+    // If RLS blocks, bubble up
+  }
+  const { error: e2 } = await sb.from('routes').delete().eq('tenant_uuid', tenantUuid).eq('id', routeId);
+  if (e2) throw e2;
+}
+
+export async function updateRouteStopsSB(
+  tenantUuid: string,
+  routeId: string,
+  stops: EditableStopInput[],
+): Promise<void> {
+  const sb = getSupabase(tenantUuid);
+  // RPC first
+  try {
+    const { error } = await sb.rpc('update_route_stops_secure', {
+      p_tenant: tenantUuid,
+      p_route: routeId,
+      p_stops: stops,
+    });
+    if (!error) return;
+    if ((error as any)?.code !== 'PGRST202') throw error;
+  } catch (e: any) {
+    if (e?.code && e.code !== 'PGRST202') throw e;
+  }
+  // Fallback: delete and reinsert
+  const { error: dErr } = await sb.from('route_stops').delete().eq('tenant_uuid', tenantUuid).eq('route_id', routeId);
+  if (dErr && (dErr as any).code !== 'PGRST116') throw dErr;
+  if (stops.length) {
+    const payload = stops.map((s) => ({
+      id: s.id,
+      tenant_uuid: tenantUuid,
+      route_id: routeId,
+      client_id: s.client_id ?? null,
+      address: s.address ?? null,
+      lat: s.lat,
+      lng: s.lng,
+      notes: s.notes ?? null,
+      sequence: s.sequence,
+      status: 'pending',
+    }));
+    const { error: iErr } = await sb.from('route_stops').insert(payload);
+    if (iErr) throw iErr;
+  }
 }
 
 export async function assignRouteToDriver(tenantUuid: string, routeId: string, userId: string | null) {
